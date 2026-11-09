@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Media Lab</title>
+<style>
+  body { font: 15px/1.6 system-ui, sans-serif; max-width: 520px; margin: 40px auto; padding: 0 20px; color: #222; }
+  .lab { background: #eef6ff; border: 1px solid #bcd7f5; border-radius: 6px; padding: 12px 16px; font-family: monospace; font-size: 13px; }
+  audio { width: 100%; margin-top: 18px; }
+</style>
+</head>
+<body>
+<div class="lab">
+  <b>media lab</b> — press play, then switch tabs (<code>gt</code>).
+  The bar shows <code>🔊 1</code> while this plays in the background.
+  Press <code>M</code> from any other tab to jump back here. Pause → the badge clears.
+</div>
+<p><a href="scroll.html">→ scroll lab</a> · <a href="form.html">→ form lab</a></p>
+
+<audio controls loop src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3">
+  your browser blocked the test stream — any mp3 url works here.
+</audio>
+<p><small>stream: soundhelix test mp3 (needs network). detection polls the
+<code>&lt;audio&gt;</code> element's paused state — the poc's stand-in for the
+real engine's per-tab audible events (R3).</small></p>
+</body>
+</html>

@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>vimzen poc</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="mode-normal">
+
+<div id="content">
+  <div id="frames"><!-- tab iframes injected by app.js --></div>
+  <div id="overlay" tabindex="0" title="NORMAL mode — click to enter INSERT"></div>
+
+  <div id="editbar-top" class="hidden">
+    <span id="editbar-top-prompt"></span>
+    <input id="editbar-top-input" spellcheck="false" autocomplete="off">
+    <span id="editbar-top-hint"></span>
+  </div>
+</div>
+
+<div id="bar">
+  <span id="badge">NORMAL</span>
+  <span id="pending"></span>
+  <span id="tabpos"></span>
+  <span id="media"></span>
+  <span id="addr"></span>
+  <span id="flash"></span>
+  <span id="editbar-bottom" class="hidden">
+    <span id="eb-prompt"></span>
+    <input id="eb-input" spellcheck="false" autocomplete="off">
+    <span id="eb-hint"></span>
+  </span>
+  <span class="flex"></span>
+  <span id="findstate"></span>
+  <span id="loadstate"></span>
+  <span id="clock"></span>
+</div>
+
+<div id="suggest" class="hidden"></div>
+<div id="taboverlay" class="hidden"></div>
+
+<div id="help" class="panel hidden">
+  <h3>keys (? or Esc to close)</h3>
+  <table>
+    <tr><td class="k">j k / C-d C-u / C-f C-b</td><td>scroll (counts work: 3j)</td></tr>
+    <tr><td class="k">gg / G</td><td>top / bottom</td></tr>
+    <tr><td class="k">H / L</td><td>history back / forward</td></tr>
+    <tr><td class="k">r</td><td>reload tab</td></tr>
+    <tr><td class="k">gt / gT / {N}gt / g0 / g$</td><td>tabs (transient overlay)</td></tr>
+    <tr><td class="k">,t</td><td>tab list picker (j/k, Enter, 1-9)</td></tr>
+    <tr><td class="k">M</td><td>jump to media tab</td></tr>
+    <tr><td class="k">i</td><td>INSERT mode (Esc / C-[ back)</td></tr>
+    <tr><td class="k">o</td><td>open url / search — ↑/C-p ↓/C-n suggestions, Tab fills</td></tr>
+    <tr><td class="k">/ then n / N</td><td>find — count shown as [index/total]</td></tr>
+    <tr><td class="k">:</td><td>ex commands: open reload help debug settings yank</td></tr>
+    <tr><td class="k">yy</td><td>yank url</td></tr>
+    <tr><td class="k">,d / ,x</td><td>debug log / experiments panel</td></tr>
+    <tr><td class="k">click bar (in INSERT)</td><td>back to NORMAL — cross-origin escape hatch</td></tr>
+  </table>
+</div>
+
+<div id="settings" class="panel hidden">
+  <h3>experiments (,x to close)</h3>
+  <div class="set-group"><b>url placement</b>
+    <label><input type="radio" name="urlPlacement" value="statusline"> always in bar (full url)</label>
+    <label><input type="radio" name="urlPlacement" value="hybrid"> hybrid (title · domain)</label>
+    <label><input type="radio" name="urlPlacement" value="hidden"> hidden (only while editing)</label>
+  </div>
+  <div class="set-group"><b>edit bar position</b>
+    <label><input type="radio" name="editPosition" value="bottom"> bottom (inline in status bar)</label>
+    <label><input type="radio" name="editPosition" value="top"> top (floating, centered)</label>
+  </div>
+  <div class="set-group"><b>address prefill on `o`</b>
+    <label><input type="radio" name="prefill" value="select"> prefilled + select-all</label>
+    <label><input type="radio" name="prefill" value="end"> prefilled + cursor at end</label>
+    <label><input type="radio" name="prefill" value="empty"> empty</label>
+  </div>
+  <div class="set-group"><b>search engine</b>
+    <select id="set-engine">
+      <option value="ddg">duckduckgo</option>
+      <option value="google">google</option>
+      <option value="bing">bing</option>
+    </select>
+    <small>most engines send X-Frame-Options → the poc shows "blocked".
+    that IS the experiment, not a bug (real engines don't have this limit).</small>
+  </div>
+  <div class="set-group"><b>mode visuals</b>
+    <label><input type="checkbox" id="set-tint"> bar background tint per mode</label>
+    <label><input type="checkbox" id="set-accent"> accent line per mode</label>
+    <label><input type="checkbox" id="set-fadeBadge"> fade mode badge in INSERT</label>
+    <label><input type="checkbox" id="set-showOverlay"> visualize NORMAL overlay</label>
+  </div>
+</div>
+
+<div id="debug" class="panel hidden">
+  <h3>debug log (,d to close)</h3>
+  <div id="debuglog"></div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

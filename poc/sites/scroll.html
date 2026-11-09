@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Scroll Lab</title>
+<style>
+  body { font: 16px/1.7 Georgia, serif; max-width: 680px; margin: 40px auto; padding: 0 20px; color: #222; }
+  .lab { background: #eef6ff; border: 1px solid #bcd7f5; border-radius: 6px; padding: 12px 16px; font-family: monospace; font-size: 13px; }
+  h2 { margin-top: 2.2em; }
+  nav a { margin-right: 12px; }
+</style>
+</head>
+<body>
+<div class="lab">
+  <b>scroll lab</b> — try <code>j k</code>, <code>C-d C-u</code>, <code>C-f C-b</code>,
+  <code>gg</code>, <code>G</code>, counts (<code>10j</code>), and <code>/</code> find
+  (search <code>needle</code> — there are needles in sections 3, 17 and 42, then <code>n</code>/<code>N</code>).
+</div>
+<nav>
+  <a href="form.html">→ form lab</a>
+  <a href="media.html">→ media lab</a>
+</nav>
+<h1 id="top">The Long Page</h1>
+</body>
+<script>
+// generate 50 sections of filler so the page is properly long
+const words = 'lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua enim ad minim veniam'.split(' ');
+const filler = () => Array.from({ length: 40 }, (_, i) => words[(i * 7) % words.length]).join(' ') + '.';
+for (let s = 1; s <= 50; s++) {
+  const h = document.createElement('h2');
+  h.textContent = `Section ${s}${[3, 17, 42].includes(s) ? ' — needle' : ''}`;
+  const p = document.createElement('p');
+  p.textContent = `${filler()} ${filler()} ${filler()}`;
+  document.body.append(h, p);
+}
+const end = document.createElement('p');
+end.innerHTML = '<b>— BOTTOM. <code>gg</code> takes you back up. —</b>';
+document.body.appendChild(end);
+</script>
+</html>
