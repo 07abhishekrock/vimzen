@@ -329,7 +329,7 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
     public func submitCurrentInput() {
         let input: String
         if let item = combobox?.selectedItem, !(combobox?.isHidden ?? true) {
-            input = item.url?.absoluteString ?? item.display
+            input = item.id.hasPrefix("tab:") ? item.id : (item.url?.absoluteString ?? item.display)
         } else {
             input = inputTextField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         }

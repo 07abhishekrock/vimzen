@@ -46,6 +46,12 @@ public final class OpenUrlInputPlugin: InputPlugin {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
+        // If an existing open tab was selected, switch to it
+        if trimmed.hasPrefix("tab:"), let uuid = UUID(uuidString: String(trimmed.dropFirst(4))) {
+            mainVC.tabManager.switchToTab(id: uuid)
+            return
+        }
+
         let targetURL = resolveURL(trimmed)
         if inNewTab || mainVC.tabManager.activeTab == nil {
             mainVC.tabManager.createTab(url: targetURL, activate: true)
@@ -116,6 +122,8 @@ public final class CommandInputPlugin: InputPlugin {
             mainVC.tabManager.activeTab?.reload()
         case ":tabnew", "tabnew", ":t", "t":
             mainVC.tabManager.createTab(url: nil, activate: true)
+        case ":b", "b", ":tabs", "tabs", ":buffers", "buffers":
+            mainVC.keyEngine.onTriggerInputPlugin?("input.tab-picker")
         case _ where cmd.starts(with: ":tabnew ") || cmd.starts(with: "tabnew ") || cmd.starts(with: ":t ") || cmd.starts(with: "t "):
             let urlPart = cmd.replacingOccurrences(of: "^:?(tabnew|t)\\s+", with: "", options: .regularExpression)
             OpenNewTabInputPlugin(tabManager: mainVC.tabManager).onSubmit(input: urlPart, controller: controller)
@@ -124,6 +132,64 @@ public final class CommandInputPlugin: InputPlugin {
             OpenUrlInputPlugin(tabManager: mainVC.tabManager, inNewTab: false).onSubmit(input: urlPart, controller: controller)
         default:
             break
+        }
+    }
+
+    public func onCancel(controller: AnyObject?) {
+        guard let mainVC = controller as? MainViewController else { return }
+        if let activeWebView = mainVC.tabManager.activeTab?.webView {
+            mainVC.view.window?.makeFirstResponder(activeWebView)
+        }
+    }
+}
+
+// MARK: - Tab Switcher / Picker Input Plugin
+
+@MainActor
+public final class TabPickerInputPlugin: InputPlugin {
+    public let id = "input.tab-picker"
+    public let prompt = "TABS"
+    public let promptIconName: String? = "rectangle.stack"
+    public let commandAliases = [":tabs", ":b", ":buffers"]
+    public let placeholder = "Filter open tabs (<C-j>/<C-k>, ↵ to switch)..."
+    public let isComboboxEnabled: Bool = true
+
+    private weak var tabManager: TabManager?
+    private lazy var tabsSource: TabsPickerSource? = {
+        guard let tm = tabManager else { return nil }
+        return TabsPickerSource(tabManager: tm)
+    }()
+
+    public init(tabManager: TabManager? = nil) {
+        self.tabManager = tabManager
+    }
+
+    public func queryItems(query: String) async -> [RankedResult] {
+        guard let tabsSource = tabsSource else { return [] }
+        let candidates = (try? await tabsSource.items(matching: query)) ?? []
+        let hasActiveTab = tabManager?.activeTab != nil
+        return PickerRanking.rank(query: query, candidates: candidates, hasActiveTab: hasActiveTab)
+    }
+
+    public func onSubmit(input: String, controller: AnyObject?) {
+        guard let mainVC = controller as? MainViewController else { return }
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        // 1. Direct UUID match (from combobox selection id)
+        if trimmed.hasPrefix("tab:"), let uuid = UUID(uuidString: String(trimmed.dropFirst(4))) {
+            mainVC.tabManager.switchToTab(id: uuid)
+            return
+        }
+
+        // 2. Fuzzy / prefix match against open tabs
+        if let match = mainVC.tabManager.tabs.first(where: {
+            $0.id.uuidString.lowercased() == trimmed.lowercased() ||
+            $0.title.lowercased().contains(trimmed.lowercased()) ||
+            $0.url?.absoluteString.lowercased().contains(trimmed.lowercased()) == true ||
+            $0.url?.host?.lowercased().contains(trimmed.lowercased()) == true
+        }) {
+            mainVC.tabManager.switchToTab(id: match.id)
         }
     }
 

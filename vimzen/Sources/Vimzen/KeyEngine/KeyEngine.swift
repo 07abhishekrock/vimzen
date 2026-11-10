@@ -223,6 +223,10 @@ public final class KeyEngine: ObservableObject {
             return true
 
         // Input Plugins (Takeover Bottom Bar)
+        case "b", "T":
+            clearBuffer()
+            onTriggerInputPlugin?("input.tab-picker")
+            return true
         case "o":
             clearBuffer()
             onTriggerInputPlugin?("input.open")

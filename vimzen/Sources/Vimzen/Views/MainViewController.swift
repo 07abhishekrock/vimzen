@@ -35,6 +35,7 @@ public final class MainViewController: NSViewController {
         // Category 2: Input Plugins (Command Bar Takeovers per Architecture §10.3)
         registry.registerInputPlugin(OpenUrlInputPlugin(tabManager: tabManager, inNewTab: false))
         registry.registerInputPlugin(OpenNewTabInputPlugin(tabManager: tabManager))
+        registry.registerInputPlugin(TabPickerInputPlugin(tabManager: tabManager))
         registry.registerInputPlugin(CommandInputPlugin())
     }
 
