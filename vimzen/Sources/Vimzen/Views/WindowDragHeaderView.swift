@@ -1,7 +1,9 @@
 import AppKit
+import Combine
 
 public final class WindowDragHeaderView: NSView {
-    private let titleLabel = NSTextField(labelWithString: "Vimzen")
+    private let defaultBg = NSColor(calibratedRed: 0.07, green: 0.07, blue: 0.08, alpha: 1.0)
+    private var cancellables = Set<AnyCancellable>()
 
     public override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -15,25 +17,27 @@ public final class WindowDragHeaderView: NSView {
 
     private func setupView() {
         wantsLayer = true
-        layer?.backgroundColor = NSColor(calibratedWhite: 0.08, alpha: 1.0).cgColor
-
-        // Subtle bottom border separating header from webpage content
-        let border = CALayer()
-        border.backgroundColor = NSColor(calibratedWhite: 0.16, alpha: 1.0).cgColor
-        border.frame = CGRect(x: 0, y: 0, width: 2000, height: 1)
-        border.autoresizingMask = [.layerWidthSizable]
-        layer?.addSublayer(border)
-
-        titleLabel.font = NSFont.systemFont(ofSize: 11, weight: .medium)
-        titleLabel.textColor = NSColor(calibratedWhite: 0.35, alpha: 1.0)
-        titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(titleLabel)
+        layer?.backgroundColor = defaultBg.cgColor
 
         NSLayoutConstraint.activate([
-            heightAnchor.constraint(equalToConstant: 28),
-            titleLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
-            titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor)
+            heightAnchor.constraint(equalToConstant: 28)
         ])
+    }
+
+    public func bind(bus: PluginDataBus) {
+        cancellables.removeAll()
+        bus.$activeTabTopColor
+            .receive(on: RunLoop.main)
+            .sink { [weak self] color in
+                guard let self = self else { return }
+                let target = color ?? self.defaultBg
+                NSAnimationContext.runAnimationGroup { ctx in
+                    ctx.duration = 0.15
+                    ctx.allowsImplicitAnimation = true
+                    self.layer?.backgroundColor = target.cgColor
+                }
+            }
+            .store(in: &cancellables)
     }
 
     public override func mouseDown(with event: NSEvent) {

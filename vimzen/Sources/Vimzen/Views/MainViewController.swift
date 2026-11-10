@@ -93,6 +93,7 @@ public final class MainViewController: NSViewController {
     }
 
     private func setupBindings() {
+        dragHeader.bind(bus: PluginDataBus.shared)
         statusBar.combobox = combobox
         statusBar.bind(keyEngine: keyEngine, tabManager: tabManager)
 

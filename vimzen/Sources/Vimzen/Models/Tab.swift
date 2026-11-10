@@ -17,9 +17,14 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
     @Published public var canGoBack: Bool = false
     @Published public var canGoForward: Bool = false
     @Published public var isJavaScriptEnabled: Bool = true
+    @Published public private(set) var topColor: NSColor? = nil
     public private(set) var currentServerTrust: SecTrust?
     public private(set) var isNewTabScratchpad: Bool = false
     public private(set) var lastActiveAt: Date = Date()
+
+    private var customTopColor: NSColor? = nil
+    private var detectedTopColor: NSColor? = nil
+    private let scriptBridge = VimzenScriptBridge()
 
     public func markActive() {
         lastActiveAt = Date()
@@ -41,11 +46,24 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
         preferences.allowsContentJavaScript = true
         webViewConfiguration.defaultWebpagePreferences = preferences
 
+        // Inject window.vimzen bridge script
+        let userScript = WKUserScript(
+            source: VimzenScriptBridge.injectedScriptSource,
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true
+        )
+        webViewConfiguration.userContentController.addUserScript(userScript)
+        webViewConfiguration.userContentController.add(scriptBridge, name: "vimzen")
+
+        // Attach custom userscripts from ~/.config/vimzen/scripts/*.js
+        UserScriptManager.shared.attachUserScripts(to: webViewConfiguration.userContentController)
+
         self.webView = WKWebView(frame: .zero, configuration: webViewConfiguration)
         self.webView.autoresizingMask = [.width, .height]
 
         super.init()
 
+        self.scriptBridge.tab = self
         self.webView.navigationDelegate = self
         setupObservers()
     }
@@ -85,6 +103,7 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
                     self.title = host
                 }
                 self.deriveFaviconURL(for: newURL)
+                self.extractTopColor()
             }
             .store(in: &cancellables)
 
@@ -176,6 +195,8 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
                 )
             }
         }
+
+        extractTopColor()
     }
 
     public func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
@@ -200,15 +221,71 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
 
     public func load(url: URL) {
         isNewTabScratchpad = false
+        customTopColor = nil
+        detectedTopColor = nil
+        topColor = nil
         let request = URLRequest(url: url)
         webView.load(request)
+    }
+
+    public func setCustomTopColor(_ color: NSColor?) {
+        customTopColor = color
+        updateEffectiveTopColor()
+    }
+
+    private func updateEffectiveTopColor() {
+        if let custom = customTopColor {
+            topColor = custom
+        } else if let detected = detectedTopColor {
+            topColor = detected
+        } else if isNewTabScratchpad {
+            topColor = NSColor(calibratedRed: 0.07, green: 0.07, blue: 0.08, alpha: 1.0)
+        } else {
+            topColor = nil
+        }
     }
 
     public func loadNewTabTemplate() {
         isNewTabScratchpad = true
         title = "New Tab"
         url = nil
+        customTopColor = nil
+        detectedTopColor = nil
+        updateEffectiveTopColor()
         webView.loadHTMLString(NewTabTemplate.html(), baseURL: nil)
+    }
+
+    public func extractTopColor() {
+        if isNewTabScratchpad {
+            updateEffectiveTopColor()
+            return
+        }
+
+        let script = """
+        (function() {
+            var meta = document.querySelector('meta[name="theme-color"]');
+            if (meta && meta.content) return meta.content;
+            if (document.body) {
+                var bg = window.getComputedStyle(document.body).backgroundColor;
+                if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return bg;
+            }
+            if (document.documentElement) {
+                var htmlBg = window.getComputedStyle(document.documentElement).backgroundColor;
+                if (htmlBg && htmlBg !== 'rgba(0, 0, 0, 0)' && htmlBg !== 'transparent') return htmlBg;
+            }
+            return null;
+        })();
+        """
+
+        webView.evaluateJavaScript(script) { [weak self] result, error in
+            guard let self = self else { return }
+            if let colorStr = result as? String, let parsed = ColorParser.parse(colorStr) {
+                self.detectedTopColor = parsed
+            } else {
+                self.detectedTopColor = nil
+            }
+            self.updateEffectiveTopColor()
+        }
     }
 
     public func focusEditorIfNewTab() {

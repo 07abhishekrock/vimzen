@@ -258,6 +258,15 @@ public final class CommandInputPlugin: InputPlugin {
         case ":cert", "cert", ":ssl", "ssl":
             let summary = mainVC.tabManager.activeTab?.certificateSummary() ?? "No active tab"
             PluginRegistry.shared.showToast(NotificationToast(message: summary, duration: 4.0))
+        case ":scripts", "scripts":
+            let dir = UserScriptManager.shared.scriptsDirectory
+            NSWorkspace.shared.open(dir)
+            let count = UserScriptManager.shared.loadScripts().count
+            PluginRegistry.shared.showToast(NotificationToast(message: "Userscripts: \(count) loaded (~/.config/vimzen/scripts)", duration: 3.0))
+        case ":reloadscripts", "reloadscripts":
+            mainVC.tabManager.activeTab?.reload()
+            let count = UserScriptManager.shared.loadScripts().count
+            PluginRegistry.shared.showToast(NotificationToast(message: "Reloaded \(count) userscript(s)", duration: 2.0))
         case _ where cmd.starts(with: ":tabnew ") || cmd.starts(with: "tabnew ") || cmd.starts(with: ":t ") || cmd.starts(with: "t "):
             let urlPart = cmd.replacingOccurrences(of: "^:?(tabnew|t)\\s+", with: "", options: .regularExpression)
             OpenNewTabInputPlugin(tabManager: mainVC.tabManager).onSubmit(input: urlPart, controller: controller)

@@ -13,6 +13,7 @@ public final class PluginDataBus: ObservableObject {
     @Published public private(set) var activeProfile: Profile = Profile.personal
     @Published public private(set) var activeTabTitle: String = ""
     @Published public private(set) var activeTabURL: URL? = nil
+    @Published public private(set) var activeTabTopColor: NSColor? = nil
     @Published public private(set) var isLoading: Bool = false
     @Published public private(set) var estimatedProgress: Double = 0.0
 
@@ -76,10 +77,18 @@ public final class PluginDataBus: ObservableObject {
         guard let tab = tab else {
             activeTabTitle = ""
             activeTabURL = nil
+            activeTabTopColor = nil
             isLoading = false
             estimatedProgress = 0.0
             return
         }
+
+        tab.$topColor
+            .receive(on: RunLoop.main)
+            .sink { [weak self] color in
+                self?.activeTabTopColor = color
+            }
+            .store(in: &activeTabCancellables)
 
         tab.$title
             .receive(on: RunLoop.main)
