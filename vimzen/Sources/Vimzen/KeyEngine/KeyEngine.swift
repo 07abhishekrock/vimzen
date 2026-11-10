@@ -335,6 +335,10 @@ public final class KeyEngine: ObservableObject {
             return true
 
         // Input Plugins (Takeover Bottom Bar)
+        case "?":
+            clearBuffer()
+            activeTab?.loadHelpTemplate()
+            return true
         case "/":
             clearBuffer()
             onTriggerInputPlugin?("input.find")

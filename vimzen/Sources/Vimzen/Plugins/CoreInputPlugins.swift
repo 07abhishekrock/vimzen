@@ -128,7 +128,9 @@ public final class OpenUrlInputPlugin: InputPlugin {
     }
 
     private func resolveURL(_ input: String) -> URL {
-        if input.starts(with: "http://") || input.starts(with: "https://") {
+        if input.starts(with: "vimzen://") {
+            return URL(string: input) ?? URL(string: "vimzen://help")!
+        } else if input.starts(with: "http://") || input.starts(with: "https://") {
             return URL(string: input) ?? URL(string: "https://google.com/search?q=\(input)")!
         } else if input.contains(".") && !input.contains(" ") {
             return URL(string: "https://\(input)")!
@@ -280,6 +282,20 @@ public final class CommandInputPlugin: InputPlugin {
             mainVC.tabManager.activeTab?.reload()
             let count = UserScriptManager.shared.loadScripts().count
             PluginRegistry.shared.showToast(NotificationToast(message: "Reloaded \(count) userscript(s)", duration: 2.0))
+        case ":help", "help", ":h", "h":
+            mainVC.tabManager.activeTab?.loadHelpTemplate()
+        case _ where cmd.starts(with: ":alias ") || cmd.starts(with: "alias "):
+            let name = cmd.replacingOccurrences(of: "^:?alias\\s+", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !name.isEmpty {
+                mainVC.tabManager.activeTab?.setAlias(name)
+                PluginRegistry.shared.showToast(NotificationToast(message: "Tab alias: @\(name)", duration: 1.5))
+            } else {
+                mainVC.tabManager.activeTab?.setAlias(nil)
+                PluginRegistry.shared.showToast(NotificationToast(message: "Cleared tab alias", duration: 1.5))
+            }
+        case ":alias", "alias", ":unalias", "unalias":
+            mainVC.tabManager.activeTab?.setAlias(nil)
+            PluginRegistry.shared.showToast(NotificationToast(message: "Cleared tab alias", duration: 1.5))
         case ":printpdf", "printpdf", ":pdf", "pdf":
             guard let activeTab = mainVC.tabManager.activeTab else { break }
             Task { @MainActor in
@@ -362,8 +378,10 @@ public final class TabPickerInputPlugin: InputPlugin {
             return
         }
 
-        // 2. Fuzzy / prefix match against open tabs
-        if let match = mainVC.tabManager.tabs.first(where: {
+        // 2. Fuzzy / prefix match against open tabs (alias, uuid, title, url)
+        let normalized = trimmed.replacingOccurrences(of: "^@", with: "", options: .regularExpression).lowercased()
+        if let match = mainVC.tabManager.currentProfileTabs.first(where: {
+            $0.alias?.lowercased() == normalized ||
             $0.id.uuidString.lowercased() == trimmed.lowercased() ||
             $0.title.lowercased().contains(trimmed.lowercased()) ||
             $0.url?.absoluteString.lowercased().contains(trimmed.lowercased()) == true ||
@@ -556,7 +574,9 @@ public final class HistoryPickerInputPlugin: InputPlugin {
     }
 
     private func resolveURL(_ input: String) -> URL {
-        if input.starts(with: "http://") || input.starts(with: "https://") {
+        if input.starts(with: "vimzen://") {
+            return URL(string: input) ?? URL(string: "vimzen://help")!
+        } else if input.starts(with: "http://") || input.starts(with: "https://") {
             return URL(string: input) ?? URL(string: "https://google.com/search?q=\(input)")!
         } else if input.contains(".") && !input.contains(" ") {
             return URL(string: "https://\(input)")!

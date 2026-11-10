@@ -20,8 +20,20 @@ public final class TabsPickerSource: PickerSource {
         }
 
         return sortedTabs.map { tab in
-            let displayTitle = tab.title.isEmpty ? (tab.url?.host ?? "New Tab") : tab.title
-            let detail = tab.url?.absoluteString
+            let displayTitle: String
+            let detail: String?
+            let searchableTitle: String
+
+            if let alias = tab.alias, !alias.isEmpty {
+                displayTitle = "@\(alias)"
+                let baseTitle = tab.title.isEmpty ? (tab.url?.host ?? "New Tab") : tab.title
+                detail = "\(baseTitle) · \(tab.url?.host ?? "")"
+                searchableTitle = "\(alias) \(tab.title)"
+            } else {
+                displayTitle = tab.title.isEmpty ? (tab.url?.host ?? "New Tab") : tab.title
+                detail = tab.url?.absoluteString
+                searchableTitle = tab.title
+            }
 
             return PickerItem(
                 id: "tab:\(tab.id.uuidString)",
@@ -29,7 +41,7 @@ public final class TabsPickerSource: PickerSource {
                 detail: detail,
                 badge: badge,
                 url: tab.url,
-                title: tab.title,
+                title: searchableTitle,
                 source: .openTab,
                 visitCount: 1,
                 lastVisitAt: tab.lastActiveAt,

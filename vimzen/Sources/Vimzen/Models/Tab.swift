@@ -22,6 +22,7 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
     @Published public var isPlayingMedia: Bool = false
     @Published public var isMuted: Bool = false
     @Published public var mediaKind: String = "none"
+    @Published public var alias: String? = nil
     public var lastSearchQuery: String = ""
     public var currentSearchIndex: Int = 0
     public var totalSearchMatches: Int = 0
@@ -38,6 +39,16 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
 
     public func markActive() {
         lastActiveAt = Date()
+    }
+
+    public func setAlias(_ newAlias: String?) {
+        let trimmed = newAlias?.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "^@", with: "", options: .regularExpression)
+        if let t = trimmed, !t.isEmpty {
+            alias = t
+        } else {
+            alias = nil
+        }
     }
 
     private var cancellables = Set<AnyCancellable>()
@@ -333,6 +344,16 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
     }
 
     public func load(url: URL) {
+        if url.scheme?.lowercased() == "vimzen" {
+            if url.host?.lowercased() == "help" {
+                loadHelpTemplate()
+                return
+            } else if url.host?.lowercased() == "newtab" {
+                loadNewTabTemplate()
+                return
+            }
+        }
+
         isNewTabScratchpad = false
         customTopColor = nil
         detectedTopColor = nil
@@ -343,6 +364,19 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
 
         let request = URLRequest(url: url)
         webView.load(request)
+    }
+
+    public func loadHelpTemplate() {
+        isNewTabScratchpad = false
+        title = "Vimzen Help"
+        url = URL(string: "vimzen://help")
+        customTopColor = nil
+        detectedTopColor = nil
+        isMuted = false
+        isAudible = false
+        isPlayingMedia = false
+        topColor = NSColor(calibratedRed: 0.07, green: 0.07, blue: 0.08, alpha: 1.0)
+        webView.loadHTMLString(HelpPageTemplate.html(), baseURL: URL(string: "vimzen://help"))
     }
 
     public func setCustomTopColor(_ color: NSColor?) {

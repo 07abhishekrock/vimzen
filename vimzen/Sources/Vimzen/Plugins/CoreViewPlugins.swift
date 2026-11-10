@@ -124,16 +124,24 @@ public final class PageIdentityPlugin: ViewPlugin {
 
     public func bind(bus: PluginDataBus) {
         cancellables.removeAll()
-        Publishers.CombineLatest(bus.$activeTabTitle, bus.$activeTabURL)
+        Publishers.CombineLatest3(bus.$activeTabTitle, bus.$activeTabURL, bus.$activeTabAlias)
             .receive(on: RunLoop.main)
-            .sink { [weak self] title, url in
+            .sink { [weak self] title, url, alias in
                 guard let self = self else { return }
+
+                let baseText: String
                 if title.isEmpty && url == nil {
-                    self.titleLabel.stringValue = "Vimzen"
+                    baseText = "Vimzen"
                 } else if !title.isEmpty {
-                    self.titleLabel.stringValue = title
+                    baseText = title
                 } else {
-                    self.titleLabel.stringValue = url?.host ?? "Loading..."
+                    baseText = url?.host ?? "Loading..."
+                }
+
+                if let a = alias, !a.isEmpty {
+                    self.titleLabel.stringValue = "@\(a) · \(baseText)"
+                } else {
+                    self.titleLabel.stringValue = baseText
                 }
             }
             .store(in: &cancellables)

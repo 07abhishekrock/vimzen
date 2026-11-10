@@ -12,6 +12,7 @@ public final class PluginDataBus: ObservableObject {
     @Published public private(set) var tabsCount: Int = 0
     @Published public private(set) var activeProfile: Profile = Profile.personal
     @Published public private(set) var activeTabTitle: String = ""
+    @Published public private(set) var activeTabAlias: String? = nil
     @Published public private(set) var activeTabURL: URL? = nil
     @Published public private(set) var activeTabTopColor: NSColor? = nil
     @Published public private(set) var audibleTabsCount: Int = 0
@@ -83,6 +84,7 @@ public final class PluginDataBus: ObservableObject {
         activeTabCancellables.removeAll()
         guard let tab = tab else {
             activeTabTitle = ""
+            activeTabAlias = nil
             activeTabURL = nil
             activeTabTopColor = nil
             activeTabIsAudible = false
@@ -91,6 +93,15 @@ public final class PluginDataBus: ObservableObject {
             estimatedProgress = 0.0
             return
         }
+
+        tab.$alias
+            .receive(on: RunLoop.main)
+            .sink { [weak self] alias in
+                self?.activeTabAlias = alias
+            }
+            .store(in: &activeTabCancellables)
+
+        activeTabAlias = tab.alias
 
         tab.$isAudible
             .receive(on: RunLoop.main)
