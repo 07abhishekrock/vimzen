@@ -26,6 +26,9 @@ public final class ProfileManager: ObservableObject {
         if profile.isEphemeral {
             return .nonPersistent()
         }
+        if profile.id == Profile.personal.id {
+            return .default()
+        }
         if let existing = dataStores[profile.id] {
             return existing
         }

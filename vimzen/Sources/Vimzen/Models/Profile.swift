@@ -25,7 +25,7 @@ public struct Profile: Identifiable, Sendable, Hashable {
     }
 
     public static let personal = Profile(
-        id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
+        id: UUID(uuidString: "A1B2C3D4-E5F6-4A7B-8C9D-0E1F2A3B4C5D")!,
         name: "Personal",
         badge: "pers",
         iconName: "person.fill",
@@ -34,7 +34,7 @@ public struct Profile: Identifiable, Sendable, Hashable {
     )
 
     public static let work = Profile(
-        id: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!,
+        id: UUID(uuidString: "B2C3D4E5-F6A7-4B8C-9D0E-1F2A3B4C5D6E")!,
         name: "Work",
         badge: "work",
         iconName: "briefcase.fill",
@@ -43,7 +43,7 @@ public struct Profile: Identifiable, Sendable, Hashable {
     )
 
     public static let incognito = Profile(
-        id: UUID(uuidString: "00000000-0000-0000-0000-000000000003")!,
+        id: UUID(uuidString: "C3D4E5F6-A7B8-4C9D-0E1F-2A3B4C5D6E7F")!,
         name: "Incognito",
         badge: "anon",
         iconName: "eyeglasses",
