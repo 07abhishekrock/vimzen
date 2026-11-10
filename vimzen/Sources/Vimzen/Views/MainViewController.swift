@@ -1,6 +1,25 @@
 import AppKit
 
 @MainActor
+public final class WindowBorderOverlayView: NSView {
+    public override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.cornerRadius = 16.0
+        layer?.borderWidth = 1.0
+        layer?.borderColor = NSColor(calibratedWhite: 0.22, alpha: 0.9).cgColor
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    public override func hitTest(_ point: NSPoint) -> NSView? {
+        return nil // Allow all mouse clicks, drags, and double clicks to pass through
+    }
+}
+
+@MainActor
 public final class MainViewController: NSViewController {
     public let tabManager = TabManager()
     public lazy var keyEngine = KeyEngine(tabManager: tabManager)
@@ -10,9 +29,16 @@ public final class MainViewController: NSViewController {
     private let combobox = ComboboxView()
 
     public override func loadView() {
-        view = NSView(frame: NSRect(x: 0, y: 0, width: 1024, height: 720))
+        view = NSView(frame: NSRect(x: 0, y: 0, width: 1240, height: 800))
         view.wantsLayer = true
+        view.layer?.cornerRadius = 16.0
+        view.layer?.masksToBounds = true
         view.layer?.backgroundColor = NSColor(calibratedWhite: 0.08, alpha: 1.0).cgColor
+    }
+
+    public override func viewDidAppear() {
+        super.viewDidAppear()
+        view.window?.invalidateShadow()
     }
 
     public override func viewDidLoad() {
@@ -73,7 +99,7 @@ public final class MainViewController: NSViewController {
             dragHeader.topAnchor.constraint(equalTo: view.topAnchor),
             dragHeader.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             dragHeader.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            dragHeader.heightAnchor.constraint(equalToConstant: 28),
+            dragHeader.heightAnchor.constraint(equalToConstant: 24),
 
             // Tab webview container takes between drag header and bottom bar
             container.topAnchor.constraint(equalTo: dragHeader.bottomAnchor),

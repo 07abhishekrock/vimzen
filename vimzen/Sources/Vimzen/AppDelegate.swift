@@ -1,9 +1,10 @@
 import AppKit
 
 @MainActor
-public final class AppDelegate: NSObject, NSApplicationDelegate {
+public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var window: KeyInterceptingWindow?
     private var mainViewController: MainViewController?
+    private var windowBorderView: WindowBorderOverlayView?
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
         setupApplicationMenu()
@@ -13,7 +14,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let window = KeyInterceptingWindow(
             contentRect: NSRect(x: 0, y: 0, width: defaultWidth, height: defaultHeight),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView, .fullScreen],
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
@@ -22,9 +23,13 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.hasShadow = true
+        window.isOpaque = false
+        window.backgroundColor = .clear
         window.isReleasedWhenClosed = false
-        window.backgroundColor = NSColor(calibratedWhite: 0.08, alpha: 1.0)
+        window.isMovable = true
+        window.isMovableByWindowBackground = true
         window.minSize = NSSize(width: 640, height: 400)
+        window.delegate = self
 
         // Restore user's saved window position and size; default to centered 1240x800 on first launch
         window.setFrameAutosaveName("VimzenMainWindow")
@@ -47,6 +52,22 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+
+        // Clip window's root frame (NSThemeFrame) to standard macOS rounded corners
+        if let themeFrame = window.contentView?.superview {
+            themeFrame.wantsLayer = true
+            themeFrame.layer?.cornerRadius = 16.0
+            themeFrame.layer?.masksToBounds = true
+
+            // 1px border drawn ABOVE everything including NSTitlebarContainerView
+            // (the titlebar container renders a glass material on macOS 26 that would
+            // otherwise hide any border placed inside the content view)
+            let border = WindowBorderOverlayView(frame: themeFrame.bounds)
+            border.autoresizingMask = [.width, .height]
+            themeFrame.addSubview(border)
+            self.windowBorderView = border
+        }
+        window.invalidateShadow()
     }
 
     public func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -135,5 +156,20 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func closeTabMenuAction() {
         mainViewController?.tabManager.closeActiveTab()
+    }
+
+    // MARK: - NSWindowDelegate
+
+    public func windowWillEnterFullScreen(_ notification: Notification) {
+        window?.contentView?.superview?.layer?.cornerRadius = 0.0
+        mainViewController?.view.layer?.cornerRadius = 0.0
+        windowBorderView?.isHidden = true
+    }
+
+    public func windowDidExitFullScreen(_ notification: Notification) {
+        window?.contentView?.superview?.layer?.cornerRadius = 16.0
+        mainViewController?.view.layer?.cornerRadius = 16.0
+        windowBorderView?.isHidden = false
+        window?.invalidateShadow()
     }
 }
