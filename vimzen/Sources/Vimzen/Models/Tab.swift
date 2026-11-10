@@ -161,11 +161,31 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
         webView.reload()
     }
 
-    public func goBack() {
-        webView.goBack()
+    public func reloadFromOrigin() {
+        webView.reloadFromOrigin()
     }
 
-    public func goForward() {
-        webView.goForward()
+    public func goBack(count: Int = 1) {
+        let backList = webView.backForwardList.backList
+        if count <= 1 {
+            if webView.canGoBack {
+                webView.goBack()
+            }
+        } else if !backList.isEmpty {
+            let targetIndex = max(0, backList.count - count)
+            webView.go(to: backList[targetIndex])
+        }
+    }
+
+    public func goForward(count: Int = 1) {
+        let forwardList = webView.backForwardList.forwardList
+        if count <= 1 {
+            if webView.canGoForward {
+                webView.goForward()
+            }
+        } else if !forwardList.isEmpty {
+            let targetIndex = min(forwardList.count - 1, count - 1)
+            webView.go(to: forwardList[targetIndex])
+        }
     }
 }

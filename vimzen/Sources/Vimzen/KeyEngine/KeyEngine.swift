@@ -63,15 +63,18 @@ public final class KeyEngine: ObservableObject {
             return true
         }
 
-        guard let characters = event.charactersIgnoringModifiers, !characters.isEmpty else {
-            return false
-        }
-
         let chord: String
         if isCtrl {
-            chord = "<C-\(characters.lowercased())>"
+            guard let base = event.charactersIgnoringModifiers?.lowercased(), !base.isEmpty else {
+                return false
+            }
+            chord = "<C-\(base)>"
         } else {
-            chord = characters
+            // Use event.characters so Shift produces uppercase 'H', 'L', 'G', 'O', 'R'
+            guard let chars = event.characters, !chars.isEmpty else {
+                return false
+            }
+            chord = chars
         }
 
         // Check interactive undo toast action hook (e.g. 'u' within 4s restores closed tab)
@@ -154,12 +157,16 @@ public final class KeyEngine: ObservableObject {
             activeTab?.reload()
             clearBuffer()
             return true
+        case "R":
+            activeTab?.reloadFromOrigin()
+            clearBuffer()
+            return true
         case "H":
-            activeTab?.goBack()
+            activeTab?.goBack(count: count)
             clearBuffer()
             return true
         case "L":
-            activeTab?.goForward()
+            activeTab?.goForward(count: count)
             clearBuffer()
             return true
 
