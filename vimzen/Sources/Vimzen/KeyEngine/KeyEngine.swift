@@ -12,6 +12,7 @@ public final class KeyEngine: ObservableObject {
 
     private weak var tabManager: TabManager?
     public var onOpenPrompt: ((Bool) -> Void)? // bool: open in new tab
+    public var onCancelPrompt: (() -> Void)?
 
     public init(tabManager: TabManager) {
         self.tabManager = tabManager
@@ -31,6 +32,18 @@ public final class KeyEngine: ObservableObject {
     /// Returns true if the key event was consumed / swallowed.
     public func processKeyEvent(_ event: NSEvent) -> Bool {
         let isCtrl = event.modifierFlags.contains(.control)
+
+        // COMMAND mode (Omnibar is active): Pass all keystrokes to the NSTextField
+        if mode == .command {
+            if event.keyCode == 53 || (isCtrl && event.charactersIgnoringModifiers == "[") {
+                // Escape or Ctrl-[ cancels Omnibar
+                setMode(.normal)
+                onCancelPrompt?()
+                return true
+            }
+            // Pass all letters, numbers, spaces, enter, etc. through to the Omnibar
+            return false
+        }
 
         // INSERT mode handling
         if mode == .insert {

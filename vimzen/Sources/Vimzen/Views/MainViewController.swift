@@ -67,6 +67,14 @@ public final class MainViewController: NSViewController {
             self.omnibar.activate(prefilled: prefill)
         }
 
+        keyEngine.onCancelPrompt = { [weak self] in
+            guard let self = self else { return }
+            self.omnibar.isHidden = true
+            if let activeWebView = self.tabManager.activeTab?.webView {
+                self.view.window?.makeFirstResponder(activeWebView)
+            }
+        }
+
         omnibar.onSubmit = { [weak self] input in
             guard let self = self else { return }
             self.navigateTo(input: input, inNewTab: self.openInNewTab)

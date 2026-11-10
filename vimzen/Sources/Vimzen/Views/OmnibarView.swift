@@ -36,6 +36,9 @@ public final class OmnibarView: NSView, NSTextFieldDelegate {
         textField.isBordered = false
         textField.drawsBackground = false
         textField.focusRingType = .none
+        textField.isEditable = true
+        textField.isSelectable = true
+        textField.refusesFirstResponder = false
         textField.font = NSFont.systemFont(ofSize: 14, weight: .regular)
         textField.textColor = NSColor.white
         textField.placeholderString = "Search or enter address (e.g. groww.in, github.com)..."
