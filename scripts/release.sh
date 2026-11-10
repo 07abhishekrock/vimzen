@@ -114,10 +114,17 @@ echo "  File size: $(du -h "${DMG_PATH}" | cut -f1)"
 
 # 5. Local Installation Option
 echo ""
-echo "==> Installing to /Applications/${APP_NAME}.app..."
-rm -rf "/Applications/${APP_NAME}.app"
-cp -R "${APP_BUNDLE}" "/Applications/"
-echo "✓ Installed Vimzen in /Applications (ready in Spotlight & Launchpad)"
+echo "==> Installing locally..."
+if [ -w "/Applications" ]; then
+    rm -rf "/Applications/${APP_NAME}.app"
+    cp -R "${APP_BUNDLE}" "/Applications/"
+    echo "✓ Installed Vimzen in /Applications (ready in Spotlight & Launchpad)"
+else
+    mkdir -p "${HOME}/Applications"
+    rm -rf "${HOME}/Applications/${APP_NAME}.app"
+    cp -R "${APP_BUNDLE}" "${HOME}/Applications/"
+    echo "✓ Installed Vimzen in ${HOME}/Applications (ready in Spotlight & Launchpad)"
+fi
 
 # 6. Git Commit, Tag & Push
 echo ""
