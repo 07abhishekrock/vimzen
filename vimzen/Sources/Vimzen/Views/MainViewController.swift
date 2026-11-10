@@ -7,8 +7,6 @@ public final class MainViewController: NSViewController {
 
     private let dragHeader = WindowDragHeaderView()
     private let statusBar = StatusBarView()
-    private let omnibar = OmnibarView()
-    private var openInNewTab: Bool = false
 
     public override func loadView() {
         view = NSView(frame: NSRect(x: 0, y: 0, width: 1024, height: 720))
@@ -18,37 +16,49 @@ public final class MainViewController: NSViewController {
 
     public override func viewDidLoad() {
         super.viewDidLoad()
+        registerCorePlugins()
         setupHierarchy()
         setupBindings()
     }
 
+    private func registerCorePlugins() {
+        let registry = PluginRegistry.shared
+
+        // Category 1: View Plugins (Passive Status Slots per Architecture §10.2)
+        registry.registerViewPlugin(ModeBadgePlugin())
+        registry.registerViewPlugin(PendingKeysPlugin())
+        registry.registerViewPlugin(PageIdentityPlugin())
+        registry.registerViewPlugin(LoadingStatusPlugin())
+        registry.registerViewPlugin(TabsCountPlugin())
+
+        // Category 2: Input Plugins (Command Bar Takeovers per Architecture §10.3)
+        registry.registerInputPlugin(OpenUrlInputPlugin(inNewTab: false))
+        registry.registerInputPlugin(OpenNewTabInputPlugin())
+        registry.registerInputPlugin(CommandInputPlugin())
+    }
+
     private func setupHierarchy() {
-        // Draggable window header at top
+        // Draggable window header at top (28px)
         dragHeader.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(dragHeader)
 
-        // Tab container view
+        // Webview tab container view
         let container = tabManager.containerView
         container.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(container)
 
-        // Status bar view
+        // 26px Zen bottom bar with plugin slots and input takeover
         statusBar.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(statusBar)
 
-        // Omnibar overlay (docks directly on the bottom bar)
-        omnibar.isHidden = true
-        omnibar.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(omnibar)
-
         NSLayoutConstraint.activate([
-            // Draggable top header (28px)
+            // Top drag header
             dragHeader.topAnchor.constraint(equalTo: view.topAnchor),
             dragHeader.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             dragHeader.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             dragHeader.heightAnchor.constraint(equalToConstant: 28),
 
-            // Webview container takes between drag header and bottom bar
+            // Tab webview container takes between drag header and bottom bar
             container.topAnchor.constraint(equalTo: dragHeader.bottomAnchor),
             container.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             container.trailingAnchor.constraint(equalTo: view.trailingAnchor),
@@ -58,68 +68,77 @@ public final class MainViewController: NSViewController {
             statusBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             statusBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             statusBar.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            statusBar.heightAnchor.constraint(equalToConstant: 26),
-
-            // Omnibar mounts directly on the bottom bar itself
-            omnibar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            omnibar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            omnibar.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            omnibar.heightAnchor.constraint(equalToConstant: 26)
+            statusBar.heightAnchor.constraint(equalToConstant: 26)
         ])
     }
 
     private func setupBindings() {
         statusBar.bind(keyEngine: keyEngine, tabManager: tabManager)
 
-        keyEngine.onOpenPrompt = { [weak self] newTab in
+        // Trigger input plugin takeover (e.g. 'o', 'O', ':')
+        keyEngine.onTriggerInputPlugin = { [weak self] pluginId in
             guard let self = self else { return }
-            self.openInNewTab = newTab
-            let prefill = newTab ? "" : (self.tabManager.activeTab?.url?.absoluteString ?? "")
-            self.keyEngine.setMode(.command)
-            self.omnibar.activate(prefilled: prefill)
-        }
-
-        keyEngine.onCancelPrompt = { [weak self] in
-            guard let self = self else { return }
-            self.omnibar.isHidden = true
-            if let activeWebView = self.tabManager.activeTab?.webView {
-                self.view.window?.makeFirstResponder(activeWebView)
+            if PluginRegistry.shared.activateInputPlugin(id: pluginId) != nil {
+                self.keyEngine.setMode(.command)
+                let prefill = (pluginId == "input.open") ? (self.tabManager.activeTab?.url?.absoluteString ?? "") : ""
+                self.statusBar.activateInput(prefill: prefill)
             }
         }
 
-        omnibar.onSubmit = { [weak self] input in
+        keyEngine.onCancelInputPlugin = { [weak self] in
             guard let self = self else { return }
-            self.navigateTo(input: input, inNewTab: self.openInNewTab)
-            self.keyEngine.setMode(.normal)
+            self.cancelCurrentInput()
         }
 
-        omnibar.onCancel = { [weak self] in
+        statusBar.onInputSubmit = { [weak self] input in
             guard let self = self else { return }
-            self.keyEngine.setMode(.normal)
-            if let activeWebView = self.tabManager.activeTab?.webView {
-                self.view.window?.makeFirstResponder(activeWebView)
+            if let activePlugin = PluginRegistry.shared.activeInputPlugin {
+                activePlugin.onSubmit(input: input, controller: self)
             }
+            self.finishCurrentInput()
+        }
+
+        statusBar.onInputCancel = { [weak self] in
+            guard let self = self else { return }
+            if let activePlugin = PluginRegistry.shared.activeInputPlugin {
+                activePlugin.onCancel(controller: self)
+            }
+            self.cancelCurrentInput()
         }
     }
 
-    private func navigateTo(input: String, inNewTab: Bool) {
-        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-
-        let targetURL: URL
-        if trimmed.starts(with: "http://") || trimmed.starts(with: "https://") {
-            targetURL = URL(string: trimmed) ?? URL(string: "https://google.com/search?q=\(trimmed)")!
-        } else if trimmed.contains(".") && !trimmed.contains(" ") {
-            targetURL = URL(string: "https://\(trimmed)")!
-        } else {
-            let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? trimmed
-            targetURL = URL(string: "https://www.google.com/search?q=\(encoded)")!
+    private func finishCurrentInput() {
+        PluginRegistry.shared.deactivateInputPlugin()
+        keyEngine.setMode(.normal)
+        if let activeWebView = tabManager.activeTab?.webView {
+            view.window?.makeFirstResponder(activeWebView)
         }
+    }
 
-        if inNewTab || tabManager.activeTab == nil {
-            tabManager.createTab(url: targetURL, activate: true)
-        } else {
-            tabManager.activeTab?.load(url: targetURL)
+    private func cancelCurrentInput() {
+        PluginRegistry.shared.deactivateInputPlugin()
+        keyEngine.setMode(.normal)
+        if let activeWebView = tabManager.activeTab?.webView {
+            view.window?.makeFirstResponder(activeWebView)
         }
+    }
+}
+
+// Concrete Open-New-Tab variant of InputPlugin
+@MainActor
+public final class OpenNewTabInputPlugin: InputPlugin {
+    public let id = "input.open-new-tab"
+    public let prompt = "NEW TAB"
+    public let commandAliases = [":tabnew", ":t"]
+    public let placeholder = "Enter URL for new tab (e.g. groww.in)..."
+
+    private let inner = OpenUrlInputPlugin(inNewTab: true)
+
+    public func onSubmit(input: String, controller: AnyObject?) {
+        inner.onSubmit(input: input, controller: controller)
+    }
+
+    public func onCancel(controller: AnyObject?) {
+        inner.onCancel(controller: controller)
     }
 }

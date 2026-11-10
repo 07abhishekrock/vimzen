@@ -2,15 +2,27 @@ import AppKit
 import Combine
 
 @MainActor
-public final class StatusBarView: NSView {
-    private let modeContainer = NSView()
-    private let modeLabel = NSTextField(labelWithString: "NORMAL")
-    private let pendingKeysLabel = NSTextField(labelWithString: "")
-    private let titleLabel = NSTextField(labelWithString: "Vimzen")
-    private let urlLabel = NSTextField(labelWithString: "")
-    private let statusIndicator = NSTextField(labelWithString: "Ready")
-    private let progressIndicator = NSProgressIndicator()
-    private let tabsCountLabel = NSTextField(labelWithString: "0 tabs")
+public final class StatusBarView: NSView, NSTextFieldDelegate {
+    private let leftStack = NSStackView()
+    private let centerStack = NSStackView()
+    private let rightStack = NSStackView()
+
+    // Interactive Toast Container
+    private let toastView = NSView()
+    private let toastMessageLabel = NSTextField(labelWithString: "")
+    private let toastActionBadge = NSView()
+    private let toastActionLabel = NSTextField(labelWithString: "u : undo")
+
+    // Input Plugin Takeover View
+    private let inputTakeoverView = NSView()
+    private let promptContainer = NSView()
+    private let promptLabel = NSTextField(labelWithString: "OPEN")
+    private let promptArrow = NSTextField(labelWithString: "❯")
+    public let inputTextField = NSTextField()
+    private let inputHintLabel = NSTextField(labelWithString: "esc: cancel   ↵: confirm")
+
+    public var onInputSubmit: ((String) -> Void)?
+    public var onInputCancel: (() -> Void)?
 
     private var cancellables = Set<AnyCancellable>()
     private var activeTabCancellables = Set<AnyCancellable>()
@@ -36,184 +48,277 @@ public final class StatusBarView: NSView {
         border.autoresizingMask = [.layerWidthSizable]
         layer?.addSublayer(border)
 
-        // Mode Badge Container with proper padding
-        modeContainer.wantsLayer = true
-        modeContainer.layer?.cornerRadius = 3
-        modeContainer.layer?.masksToBounds = true
-        modeContainer.translatesAutoresizingMaskIntoConstraints = false
-
-        modeLabel.font = NSFont.monospacedSystemFont(ofSize: 10, weight: .heavy)
-        modeLabel.alignment = .center
-        modeLabel.translatesAutoresizingMaskIntoConstraints = false
-        modeContainer.addSubview(modeLabel)
-
-        // Pending Keys (showcmd)
-        pendingKeysLabel.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .medium)
-        pendingKeysLabel.textColor = NSColor(calibratedRed: 0.95, green: 0.77, blue: 0.06, alpha: 1.0)
-        pendingKeysLabel.translatesAutoresizingMaskIntoConstraints = false
-
-        // Title Label
-        titleLabel.font = NSFont.systemFont(ofSize: 11, weight: .semibold)
-        titleLabel.textColor = NSColor(calibratedWhite: 0.90, alpha: 1.0)
-        titleLabel.lineBreakMode = .byTruncatingTail
-        titleLabel.translatesAutoresizingMaskIntoConstraints = false
-
-        // URL Label (max 20 characters)
-        urlLabel.font = NSFont.systemFont(ofSize: 11, weight: .regular)
-        urlLabel.textColor = NSColor(calibratedWhite: 0.50, alpha: 1.0)
-        urlLabel.lineBreakMode = .byClipping
-        urlLabel.translatesAutoresizingMaskIntoConstraints = false
-
-        // Status Indicator
-        statusIndicator.font = NSFont.systemFont(ofSize: 11, weight: .regular)
-        statusIndicator.textColor = NSColor(calibratedWhite: 0.60, alpha: 1.0)
-        statusIndicator.translatesAutoresizingMaskIntoConstraints = false
-
-        // Progress Indicator
-        progressIndicator.style = .spinning
-        progressIndicator.controlSize = .small
-        progressIndicator.isDisplayedWhenStopped = false
-        progressIndicator.translatesAutoresizingMaskIntoConstraints = false
-
-        // Tab count
-        tabsCountLabel.font = NSFont.systemFont(ofSize: 10, weight: .medium)
-        tabsCountLabel.textColor = NSColor(calibratedWhite: 0.50, alpha: 1.0)
-        tabsCountLabel.translatesAutoresizingMaskIntoConstraints = false
-
-        // Assemble Left Stack
-        let leftStack = NSStackView(views: [modeContainer, pendingKeysLabel, titleLabel, urlLabel])
+        // Slot Stacks
         leftStack.orientation = .horizontal
         leftStack.spacing = 8
         leftStack.alignment = .centerY
         leftStack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(leftStack)
 
-        // Assemble Right Stack
-        let rightStack = NSStackView(views: [progressIndicator, statusIndicator, tabsCountLabel])
+        centerStack.orientation = .horizontal
+        centerStack.spacing = 8
+        centerStack.alignment = .centerY
+        centerStack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(centerStack)
+
         rightStack.orientation = .horizontal
         rightStack.spacing = 8
         rightStack.alignment = .centerY
         rightStack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(rightStack)
 
+        setupToastView()
+        setupInputTakeoverView()
+
         NSLayoutConstraint.activate([
             heightAnchor.constraint(equalToConstant: 26),
-
-            // Mode badge internal padding (6px horizontal, 18px height)
-            modeContainer.heightAnchor.constraint(equalToConstant: 18),
-            modeLabel.leadingAnchor.constraint(equalTo: modeContainer.leadingAnchor, constant: 6),
-            modeLabel.trailingAnchor.constraint(equalTo: modeContainer.trailingAnchor, constant: -6),
-            modeLabel.centerYAnchor.constraint(equalTo: modeContainer.centerYAnchor),
 
             leftStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
             leftStack.centerYAnchor.constraint(equalTo: centerYAnchor),
             leftStack.trailingAnchor.constraint(lessThanOrEqualTo: rightStack.leadingAnchor, constant: -16),
 
+            centerStack.centerXAnchor.constraint(equalTo: centerXAnchor),
+            centerStack.centerYAnchor.constraint(equalTo: centerYAnchor),
+
             rightStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
             rightStack.centerYAnchor.constraint(equalTo: centerYAnchor)
         ])
 
-        updateModeBadge(mode: .normal)
+        reloadPluginViews()
+    }
+
+    private func setupToastView() {
+        toastView.wantsLayer = true
+        toastView.layer?.backgroundColor = NSColor(calibratedWhite: 0.14, alpha: 1.0).cgColor
+        toastView.isHidden = true
+        toastView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(toastView)
+
+        toastMessageLabel.font = NSFont.systemFont(ofSize: 11, weight: .medium)
+        toastMessageLabel.textColor = NSColor(calibratedRed: 0.95, green: 0.77, blue: 0.06, alpha: 1.0)
+        toastMessageLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        toastActionBadge.wantsLayer = true
+        toastActionBadge.layer?.backgroundColor = NSColor(calibratedWhite: 0.25, alpha: 1.0).cgColor
+        toastActionBadge.layer?.cornerRadius = 3
+        toastActionBadge.translatesAutoresizingMaskIntoConstraints = false
+
+        toastActionLabel.font = NSFont.monospacedSystemFont(ofSize: 10, weight: .bold)
+        toastActionLabel.textColor = .white
+        toastActionLabel.translatesAutoresizingMaskIntoConstraints = false
+        toastActionBadge.addSubview(toastActionLabel)
+
+        let toastStack = NSStackView(views: [toastMessageLabel, toastActionBadge])
+        toastStack.orientation = .horizontal
+        toastStack.spacing = 8
+        toastStack.alignment = .centerY
+        toastStack.translatesAutoresizingMaskIntoConstraints = false
+        toastView.addSubview(toastStack)
+
+        NSLayoutConstraint.activate([
+            toastView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            toastView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            toastView.topAnchor.constraint(equalTo: topAnchor),
+            toastView.bottomAnchor.constraint(equalTo: bottomAnchor),
+
+            toastStack.leadingAnchor.constraint(equalTo: toastView.leadingAnchor, constant: 12),
+            toastStack.centerYAnchor.constraint(equalTo: toastView.centerYAnchor),
+
+            toastActionBadge.heightAnchor.constraint(equalToConstant: 16),
+            toastActionLabel.leadingAnchor.constraint(equalTo: toastActionBadge.leadingAnchor, constant: 5),
+            toastActionLabel.trailingAnchor.constraint(equalTo: toastActionBadge.trailingAnchor, constant: -5),
+            toastActionLabel.centerYAnchor.constraint(equalTo: toastActionBadge.centerYAnchor)
+        ])
+    }
+
+    private func setupInputTakeoverView() {
+        inputTakeoverView.wantsLayer = true
+        inputTakeoverView.layer?.backgroundColor = NSColor(calibratedWhite: 0.11, alpha: 1.0).cgColor
+        inputTakeoverView.isHidden = true
+        inputTakeoverView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(inputTakeoverView)
+
+        promptContainer.wantsLayer = true
+        promptContainer.layer?.backgroundColor = NSColor(calibratedRed: 0.61, green: 0.35, blue: 0.71, alpha: 1.0).cgColor
+        promptContainer.layer?.cornerRadius = 3
+        promptContainer.translatesAutoresizingMaskIntoConstraints = false
+
+        promptLabel.font = NSFont.monospacedSystemFont(ofSize: 10, weight: .heavy)
+        promptLabel.textColor = .white
+        promptLabel.translatesAutoresizingMaskIntoConstraints = false
+        promptContainer.addSubview(promptLabel)
+
+        promptArrow.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .bold)
+        promptArrow.textColor = NSColor(calibratedRed: 0.20, green: 0.60, blue: 1.00, alpha: 1.0)
+        promptArrow.translatesAutoresizingMaskIntoConstraints = false
+
+        inputTextField.isBordered = false
+        inputTextField.drawsBackground = false
+        inputTextField.focusRingType = .none
+        inputTextField.isEditable = true
+        inputTextField.isSelectable = true
+        inputTextField.refusesFirstResponder = false
+        inputTextField.font = NSFont.systemFont(ofSize: 11, weight: .regular)
+        inputTextField.textColor = .white
+        inputTextField.delegate = self
+        inputTextField.translatesAutoresizingMaskIntoConstraints = false
+
+        inputHintLabel.font = NSFont.systemFont(ofSize: 10, weight: .medium)
+        inputHintLabel.textColor = NSColor(calibratedWhite: 0.45, alpha: 1.0)
+        inputHintLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        inputTakeoverView.addSubview(promptContainer)
+        inputTakeoverView.addSubview(promptArrow)
+        inputTakeoverView.addSubview(inputTextField)
+        inputTakeoverView.addSubview(inputHintLabel)
+
+        NSLayoutConstraint.activate([
+            inputTakeoverView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            inputTakeoverView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            inputTakeoverView.topAnchor.constraint(equalTo: topAnchor),
+            inputTakeoverView.bottomAnchor.constraint(equalTo: bottomAnchor),
+
+            promptContainer.leadingAnchor.constraint(equalTo: inputTakeoverView.leadingAnchor, constant: 10),
+            promptContainer.centerYAnchor.constraint(equalTo: inputTakeoverView.centerYAnchor),
+            promptContainer.heightAnchor.constraint(equalToConstant: 18),
+            promptLabel.leadingAnchor.constraint(equalTo: promptContainer.leadingAnchor, constant: 6),
+            promptLabel.trailingAnchor.constraint(equalTo: promptContainer.trailingAnchor, constant: -6),
+            promptLabel.centerYAnchor.constraint(equalTo: promptContainer.centerYAnchor),
+
+            promptArrow.leadingAnchor.constraint(equalTo: promptContainer.trailingAnchor, constant: 6),
+            promptArrow.centerYAnchor.constraint(equalTo: inputTakeoverView.centerYAnchor),
+
+            inputTextField.leadingAnchor.constraint(equalTo: promptArrow.trailingAnchor, constant: 6),
+            inputTextField.centerYAnchor.constraint(equalTo: inputTakeoverView.centerYAnchor),
+            inputTextField.trailingAnchor.constraint(equalTo: inputHintLabel.leadingAnchor, constant: -12),
+
+            inputHintLabel.trailingAnchor.constraint(equalTo: inputTakeoverView.trailingAnchor, constant: -10),
+            inputHintLabel.centerYAnchor.constraint(equalTo: inputTakeoverView.centerYAnchor)
+        ])
+    }
+
+    public func reloadPluginViews() {
+        leftStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        centerStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        rightStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+
+        for plugin in PluginRegistry.shared.plugins(for: .left) {
+            leftStack.addArrangedSubview(plugin.view)
+        }
+        for plugin in PluginRegistry.shared.plugins(for: .center) {
+            centerStack.addArrangedSubview(plugin.view)
+        }
+        for plugin in PluginRegistry.shared.plugins(for: .right) {
+            rightStack.addArrangedSubview(plugin.view)
+        }
     }
 
     public func bind(keyEngine: KeyEngine, tabManager: TabManager) {
         cancellables.removeAll()
 
-        keyEngine.$mode
+        // 1. Observe plugins registration
+        PluginRegistry.shared.$viewPlugins
             .receive(on: RunLoop.main)
-            .sink { [weak self] mode in self?.updateModeBadge(mode: mode) }
+            .sink { [weak self] _ in self?.reloadPluginViews() }
             .store(in: &cancellables)
 
-        keyEngine.$pendingKeys
+        // 2. Observe active input plugin (takeover)
+        PluginRegistry.shared.$activeInputPlugin
             .receive(on: RunLoop.main)
-            .sink { [weak self] keys in self?.pendingKeysLabel.stringValue = keys }
-            .store(in: &cancellables)
-
-        tabManager.$tabs
-            .receive(on: RunLoop.main)
-            .sink { [weak self] tabs in
-                self?.tabsCountLabel.stringValue = "\(tabs.count) tab\(tabs.count == 1 ? "" : "s")"
-            }
-            .store(in: &cancellables)
-
-        // Watch for active tab identity changes and rebind observers
-        tabManager.$activeTabId
-            .receive(on: RunLoop.main)
-            .sink { [weak self, weak tabManager] _ in
-                guard let self = self, let tm = tabManager else { return }
-                self.updateForActiveTab(tm.activeTab)
-            }
-            .store(in: &cancellables)
-
-        updateForActiveTab(tabManager.activeTab)
-    }
-
-    public func updateForActiveTab(_ tab: Tab?) {
-        activeTabCancellables.removeAll()
-
-        guard let tab = tab else {
-            titleLabel.stringValue = "Vimzen"
-            urlLabel.stringValue = ""
-            statusIndicator.stringValue = "Idle"
-            progressIndicator.stopAnimation(nil)
-            return
-        }
-
-        // Live Combine subscription to title & url changes
-        Publishers.CombineLatest(tab.$title, tab.$url)
-            .receive(on: RunLoop.main)
-            .sink { [weak self] (title, url) in
+            .sink { [weak self] activePlugin in
                 guard let self = self else { return }
-                let displayTitle = title.isEmpty ? (url?.host ?? "Loading...") : title
-                self.titleLabel.stringValue = displayTitle
-                self.urlLabel.stringValue = self.formatURL(url)
-            }
-            .store(in: &activeTabCancellables)
-
-        // Live Combine subscription to loading & progress changes
-        Publishers.CombineLatest(tab.$isLoading, tab.$estimatedProgress)
-            .receive(on: RunLoop.main)
-            .sink { [weak self] (isLoading, progress) in
-                guard let self = self else { return }
-                if isLoading && progress < 1.0 {
-                    let percent = max(10, Int(progress * 100))
-                    self.statusIndicator.stringValue = "\(percent)%"
-                    self.progressIndicator.startAnimation(nil)
+                if let plugin = activePlugin {
+                    self.showInputTakeover(plugin: plugin)
                 } else {
-                    self.statusIndicator.stringValue = "Ready"
-                    self.progressIndicator.stopAnimation(nil)
+                    self.hideInputTakeover()
                 }
             }
+            .store(in: &cancellables)
+
+        // 3. Observe active notification toast
+        PluginRegistry.shared.$activeToast
+            .receive(on: RunLoop.main)
+            .sink { [weak self] toast in
+                guard let self = self else { return }
+                if let toast = toast {
+                    self.toastMessageLabel.stringValue = toast.message
+                    if let key = toast.actionKey, let label = toast.actionLabel {
+                        self.toastActionLabel.stringValue = "\(key) : \(label)"
+                        self.toastActionBadge.isHidden = false
+                    } else {
+                        self.toastActionBadge.isHidden = true
+                    }
+                    self.toastView.isHidden = false
+                } else {
+                    self.toastView.isHidden = true
+                }
+            }
+            .store(in: &cancellables)
+
+        // 4. Update all view plugins on key/tab changes
+        Publishers.CombineLatest4(keyEngine.$mode, keyEngine.$pendingKeys, tabManager.$tabs, tabManager.$activeTabId)
+            .receive(on: RunLoop.main)
+            .sink { [weak self, weak tabManager] (mode, keys, tabs, _) in
+                guard let self = self, let tm = tabManager else { return }
+                self.broadcastUpdate(mode: mode, pendingKeys: keys, activeTab: tm.activeTab, tabsCount: tabs.count)
+                self.bindActiveTab(tm.activeTab, keyEngine: keyEngine, tabManager: tm)
+            }
+            .store(in: &cancellables)
+
+        broadcastUpdate(mode: keyEngine.mode, pendingKeys: keyEngine.pendingKeys, activeTab: tabManager.activeTab, tabsCount: tabManager.tabs.count)
+        bindActiveTab(tabManager.activeTab, keyEngine: keyEngine, tabManager: tabManager)
+    }
+
+    private func bindActiveTab(_ tab: Tab?, keyEngine: KeyEngine, tabManager: TabManager) {
+        activeTabCancellables.removeAll()
+        guard let tab = tab else { return }
+
+        Publishers.CombineLatest4(tab.$title, tab.$url, tab.$isLoading, tab.$estimatedProgress)
+            .receive(on: RunLoop.main)
+            .sink { [weak self, weak keyEngine, weak tabManager] _ in
+                guard let self = self, let ke = keyEngine, let tm = tabManager else { return }
+                self.broadcastUpdate(mode: ke.mode, pendingKeys: ke.pendingKeys, activeTab: tab, tabsCount: tm.tabs.count)
+            }
             .store(in: &activeTabCancellables)
     }
 
-    /// Formats the URL so it never exceeds 20 characters, using "..." when truncated.
-    private func formatURL(_ url: URL?) -> String {
-        guard let url = url else { return "" }
-        var str = url.absoluteString
-
-        // Strip protocol prefix for clean display
-        if str.hasPrefix("https://") {
-            str = String(str.dropFirst(8))
-        } else if str.hasPrefix("http://") {
-            str = String(str.dropFirst(7))
+    private func broadcastUpdate(mode: Mode, pendingKeys: String, activeTab: Tab?, tabsCount: Int) {
+        let ctx = PluginContext(mode: mode, pendingKeys: pendingKeys, activeTab: activeTab, tabsCount: tabsCount)
+        for plugin in PluginRegistry.shared.viewPlugins {
+            plugin.update(with: ctx)
         }
-
-        // Strip single trailing slash on bare domains (e.g. "groww.in/" -> "groww.in")
-        if str.hasSuffix("/") && str.filter({ $0 == "/" }).count == 1 {
-            str = String(str.dropLast())
-        }
-
-        // Never exceed 20 characters
-        if str.count > 20 {
-            return String(str.prefix(17)) + "..."
-        }
-        return str
     }
 
-    private func updateModeBadge(mode: Mode) {
-        modeLabel.stringValue = mode.badgeText
-        modeLabel.textColor = mode.badgeTextColor
-        modeContainer.layer?.backgroundColor = mode.badgeBackgroundColor.cgColor
+    private func showInputTakeover(plugin: InputPlugin) {
+        promptLabel.stringValue = plugin.prompt
+        inputTextField.placeholderString = plugin.placeholder
+        inputTakeoverView.isHidden = false
+        window?.makeFirstResponder(inputTextField)
+    }
+
+    private func hideInputTakeover() {
+        inputTakeoverView.isHidden = true
+    }
+
+    public func activateInput(prefill: String = "") {
+        inputTextField.stringValue = prefill
+        window?.makeFirstResponder(inputTextField)
+        if !prefill.isEmpty {
+            inputTextField.selectText(nil)
+        }
+    }
+
+    // MARK: - NSTextFieldDelegate
+
+    public func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+        if commandSelector == #selector(NSResponder.insertNewline(_:)) {
+            let input = inputTextField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            onInputSubmit?(input)
+            return true
+        } else if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
+            onInputCancel?()
+            return true
+        }
+        return false
     }
 }

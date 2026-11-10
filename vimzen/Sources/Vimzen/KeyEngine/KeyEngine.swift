@@ -11,8 +11,8 @@ public final class KeyEngine: ObservableObject {
     private var lastKeyTime: Date?
 
     private weak var tabManager: TabManager?
-    public var onOpenPrompt: ((Bool) -> Void)? // bool: open in new tab
-    public var onCancelPrompt: (() -> Void)?
+    public var onTriggerInputPlugin: ((String) -> Void)?
+    public var onCancelInputPlugin: (() -> Void)?
 
     public init(tabManager: TabManager) {
         self.tabManager = tabManager
@@ -33,15 +33,15 @@ public final class KeyEngine: ObservableObject {
     public func processKeyEvent(_ event: NSEvent) -> Bool {
         let isCtrl = event.modifierFlags.contains(.control)
 
-        // COMMAND mode (Omnibar is active): Pass all keystrokes to the NSTextField
+        // COMMAND mode (Input plugin takeover active)
         if mode == .command {
             if event.keyCode == 53 || (isCtrl && event.charactersIgnoringModifiers == "[") {
-                // Escape or Ctrl-[ cancels Omnibar
+                // Escape or Ctrl-[ cancels the active input plugin
                 setMode(.normal)
-                onCancelPrompt?()
+                onCancelInputPlugin?()
                 return true
             }
-            // Pass all letters, numbers, spaces, enter, etc. through to the Omnibar
+            // Pass all keystrokes through to the active input plugin's text field
             return false
         }
 
@@ -56,9 +56,10 @@ public final class KeyEngine: ObservableObject {
             return false
         }
 
-        // We are in NORMAL mode: all keys are evaluated or swallowed from the web page!
+        // NORMAL mode: all keys are evaluated or swallowed from the webpage!
         if event.keyCode == 53 { // Escape
             clearBuffer()
+            PluginRegistry.shared.clearToast()
             return true
         }
 
@@ -71,6 +72,14 @@ public final class KeyEngine: ObservableObject {
             chord = "<C-\(characters.lowercased())>"
         } else {
             chord = characters
+        }
+
+        // Check interactive undo toast action hook (e.g. 'u' within 4s restores closed tab)
+        if chord == "u", let toast = PluginRegistry.shared.activeToast, toast.actionKey == "u" {
+            toast.onAction?()
+            PluginRegistry.shared.clearToast()
+            clearBuffer()
+            return true
         }
 
         // Check 1000ms chord timeout
@@ -169,25 +178,46 @@ public final class KeyEngine: ObservableObject {
             clearBuffer()
             return true
         case "x", ":q":
-            tabManager.closeActiveTab()
+            // Close tab and display 4s interactive undo toast (§10.4)
+            if let closing = activeTab {
+                let savedURL = closing.url
+                let savedTitle = closing.title
+                tabManager.closeActiveTab()
+
+                let toast = NotificationToast(
+                    message: "Closed: \(savedTitle.isEmpty ? (savedURL?.host ?? "Tab") : savedTitle)",
+                    actionKey: "u",
+                    actionLabel: "undo (4s)",
+                    duration: 4.0,
+                    onAction: { [weak tabManager] in
+                        if let url = savedURL {
+                            tabManager?.createTab(url: url, activate: true)
+                        }
+                    }
+                )
+                PluginRegistry.shared.showToast(toast)
+            }
             clearBuffer()
             return true
         case ":qa":
             NSApp.terminate(nil)
             return true
 
-        // Omnibar inputs
+        // Input Plugins (Takeover Bottom Bar)
         case "o":
             clearBuffer()
-            onOpenPrompt?(false)
+            onTriggerInputPlugin?("input.open")
             return true
         case "O":
             clearBuffer()
-            onOpenPrompt?(true)
+            onTriggerInputPlugin?("input.open-new-tab")
+            return true
+        case ":":
+            clearBuffer()
+            onTriggerInputPlugin?("input.command")
             return true
 
         default:
-            // Check if sequence is a prefix for any valid sequence (e.g. 'g' for 'gg' or 'gt', ':' for ':q')
             let validPrefixes = ["g", ":"]
             if !validPrefixes.contains(sequence) {
                 clearBuffer()
