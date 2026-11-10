@@ -117,6 +117,16 @@ public final class TabManager: ObservableObject {
         PluginRegistry.shared.showToast(toast)
     }
 
+    public func switchToLastActiveProfile() {
+        guard let prevProfileId = ProfileManager.shared.previousActiveProfileId,
+              ProfileManager.shared.profiles.contains(where: { $0.id == prevProfileId }) else {
+            let toast = NotificationToast(message: "No alternate profile", duration: 2.0)
+            PluginRegistry.shared.showToast(toast)
+            return
+        }
+        switchProfile(to: prevProfileId)
+    }
+
     public func moveCurrentTab(to targetProfileId: UUID) {
         guard let currentTab = activeTab else { return }
         guard targetProfileId != currentTab.profileId else { return }

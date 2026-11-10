@@ -186,6 +186,8 @@ public final class CommandInputPlugin: InputPlugin {
             mainVC.tabManager.switchToLastActiveTab()
         case ":b", "b", ":tabs", "tabs", ":buffers", "buffers":
             mainVC.keyEngine.onTriggerInputPlugin?("input.tab-picker")
+        case ":p#", "p#", ":p #", "p #", ":profile#", "profile#":
+            mainVC.tabManager.switchToLastActiveProfile()
         case ":p", "p", ":profile", "profile":
             mainVC.keyEngine.onTriggerInputPlugin?("input.profile-picker")
         case _ where cmd.starts(with: ":p new ") || cmd.starts(with: "p new ") || cmd.starts(with: ":profile new ") || cmd.starts(with: "profile new "):

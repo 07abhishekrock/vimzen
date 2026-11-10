@@ -227,6 +227,10 @@ public final class KeyEngine: ObservableObject {
             tabManager.switchToLastActiveTab()
             clearBuffer()
             return true
+        case "<C-p>":
+            tabManager.switchToLastActiveProfile()
+            clearBuffer()
+            return true
         case "x", ":q":
             // Close tab and display 4s interactive undo toast (§10.4)
             if let closing = activeTab {

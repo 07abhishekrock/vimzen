@@ -13,6 +13,7 @@ public final class ProfileManager: ObservableObject {
     ]
 
     @Published public private(set) var activeProfileId: UUID = Profile.personal.id
+    public private(set) var previousActiveProfileId: UUID?
 
     public var activeProfile: Profile {
         profiles.first(where: { $0.id == activeProfileId }) ?? Profile.personal
@@ -62,6 +63,9 @@ public final class ProfileManager: ObservableObject {
 
     public func setActiveProfile(id: UUID) {
         guard profiles.contains(where: { $0.id == id }) else { return }
+        if activeProfileId != id {
+            previousActiveProfileId = activeProfileId
+        }
         activeProfileId = id
     }
 
