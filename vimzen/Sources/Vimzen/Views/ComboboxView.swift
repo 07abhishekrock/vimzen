@@ -55,6 +55,8 @@ public final class ComboboxRowView: NSView {
         primaryLabel.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .medium)
         primaryLabel.textColor = .white
         primaryLabel.lineBreakMode = .byTruncatingTail
+        primaryLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        primaryLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         primaryLabel.translatesAutoresizingMaskIntoConstraints = false
 
         // Secondary text (Detail e.g. domain or search provider)
@@ -62,6 +64,8 @@ public final class ComboboxRowView: NSView {
         detailLabel.font = NSFont.monospacedSystemFont(ofSize: 10, weight: .regular)
         detailLabel.textColor = NSColor(calibratedWhite: 0.50, alpha: 1.0)
         detailLabel.lineBreakMode = .byTruncatingTail
+        detailLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        detailLabel.setContentCompressionResistancePriority(NSLayoutConstraint.Priority(249), for: .horizontal)
         detailLabel.translatesAutoresizingMaskIntoConstraints = false
 
         addSubview(badgeContainer)
@@ -80,10 +84,10 @@ public final class ComboboxRowView: NSView {
             badgeLabel.centerXAnchor.constraint(equalTo: badgeContainer.centerXAnchor),
             badgeLabel.centerYAnchor.constraint(equalTo: badgeContainer.centerYAnchor),
 
-            // Primary display title
+            // Primary display title (limited to 55% of row width to allow detail label room)
             primaryLabel.leadingAnchor.constraint(equalTo: badgeContainer.trailingAnchor, constant: 8),
             primaryLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-            primaryLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 400),
+            primaryLabel.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, multiplier: 0.55),
 
             // Secondary detail info
             detailLabel.leadingAnchor.constraint(equalTo: primaryLabel.trailingAnchor, constant: 12),
@@ -118,13 +122,13 @@ public final class ComboboxView: NSView {
     private let stackView = NSStackView()
     private var rowViews: [ComboboxRowView] = []
     public private(set) var items: [RankedResult] = []
-    public private(set) var selectedIndex: Int = 0
+    public private(set) var selectedIndex: Int? = nil
 
     public var selectedItem: RankedResult? {
-        guard !items.isEmpty, selectedIndex >= 0 && selectedIndex < items.count else {
+        guard let idx = selectedIndex, !items.isEmpty, idx >= 0 && idx < items.count else {
             return nil
         }
-        return items[selectedIndex]
+        return items[idx]
     }
 
     public override init(frame frameRect: NSRect) {
@@ -148,6 +152,9 @@ public final class ComboboxView: NSView {
         layer?.shadowRadius = 10
         layer?.shadowOffset = CGSize(width: 0, height: 4)
 
+        setContentHuggingPriority(.defaultLow, for: .horizontal)
+        setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
         stackView.orientation = .vertical
         stackView.spacing = 2
         stackView.alignment = .width
@@ -166,7 +173,7 @@ public final class ComboboxView: NSView {
 
     public func updateItems(_ newItems: [RankedResult]) {
         self.items = Array(newItems.prefix(8))
-        selectedIndex = 0
+        selectedIndex = nil
 
         stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
         rowViews.removeAll()
@@ -178,7 +185,7 @@ public final class ComboboxView: NSView {
 
         for (index, item) in items.enumerated() {
             let rowView = ComboboxRowView(item: item)
-            rowView.isSelected = (index == selectedIndex)
+            rowView.isSelected = false
             rowView.translatesAutoresizingMaskIntoConstraints = false
 
             rowView.onSelect = { [weak self] in
@@ -238,13 +245,30 @@ public final class ComboboxView: NSView {
 
     public func moveSelection(by delta: Int) {
         guard !rowViews.isEmpty else { return }
-        selectedIndex = (selectedIndex + delta + rowViews.count) % rowViews.count
+
+        if let current = selectedIndex {
+            let next = current + delta
+            if next < 0 || next >= rowViews.count {
+                // Moving up from top row or down past bottom row deselects, returning focus to raw text
+                selectedIndex = nil
+            } else {
+                selectedIndex = next
+            }
+        } else {
+            // Nothing was selected yet
+            if delta > 0 {
+                selectedIndex = 0
+            } else {
+                selectedIndex = rowViews.count - 1
+            }
+        }
+
         updateSelectionUI()
     }
 
     private func updateSelectionUI() {
         for (index, rowView) in rowViews.enumerated() {
-            rowView.isSelected = (index == selectedIndex)
+            rowView.isSelected = (selectedIndex == index)
         }
     }
 
@@ -252,6 +276,7 @@ public final class ComboboxView: NSView {
         isHidden = true
         items.removeAll()
         rowViews.removeAll()
+        selectedIndex = nil
         stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
     }
 }

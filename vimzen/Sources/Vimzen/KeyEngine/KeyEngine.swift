@@ -14,6 +14,7 @@ public final class KeyEngine: ObservableObject {
     public var onTriggerInputPlugin: ((String) -> Void)?
     public var onCancelInputPlugin: (() -> Void)?
     public var onComboboxMove: ((Int) -> Void)?
+    public var onComboboxSubmitNewTab: (() -> Void)?
 
     public init(tabManager: TabManager) {
         self.tabManager = tabManager
@@ -51,6 +52,16 @@ public final class KeyEngine: ObservableObject {
             if isCtrl && event.charactersIgnoringModifiers == "k" {
                 onComboboxMove?(-1)
                 return true
+            }
+
+            // Route Ctrl-Return / Cmd-Return / Shift-Return to submit custom query in a new tab
+            if event.keyCode == 36 {
+                let isCmd = event.modifierFlags.contains(.command)
+                let isShift = event.modifierFlags.contains(.shift)
+                if isCtrl || isCmd || isShift {
+                    onComboboxSubmitNewTab?()
+                    return true
+                }
             }
 
             // Pass all other keystrokes through to the active input plugin's text field

@@ -89,13 +89,17 @@ public final class MainViewController: NSViewController {
 
         combobox.onCommitSelection = { [weak self] item in
             guard let self = self else { return }
-            let target = item.url?.absoluteString ?? item.display
+            let target = item.id.hasPrefix("tab:") ? item.id : (item.url?.absoluteString ?? item.display)
             self.statusBar.inputTextField.stringValue = target
-            self.statusBar.submitCurrentInput()
+            self.statusBar.submitCurrentInput(openInNewTab: false, forceRawInput: false)
         }
 
         keyEngine.onComboboxMove = { [weak self] delta in
             self?.combobox.moveSelection(by: delta)
+        }
+
+        keyEngine.onComboboxSubmitNewTab = { [weak self] in
+            self?.statusBar.submitCurrentInput(openInNewTab: true, forceRawInput: true)
         }
 
         // Trigger input plugin takeover (e.g. 'o', 'O', ':')
@@ -113,9 +117,11 @@ public final class MainViewController: NSViewController {
             self.cancelCurrentInput()
         }
 
-        statusBar.onInputSubmit = { [weak self] input in
+        statusBar.onInputSubmit = { [weak self] input, openInNewTab in
             guard let self = self else { return }
-            if let activePlugin = PluginRegistry.shared.activeInputPlugin {
+            if openInNewTab {
+                OpenNewTabInputPlugin(tabManager: self.tabManager).onSubmit(input: input, controller: self)
+            } else if let activePlugin = PluginRegistry.shared.activeInputPlugin {
                 activePlugin.onSubmit(input: input, controller: self)
             }
             self.finishCurrentInput()

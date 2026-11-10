@@ -24,7 +24,7 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
     public weak var combobox: ComboboxView?
     private var queryTask: Task<Void, Never>?
 
-    public var onInputSubmit: ((String) -> Void)?
+    public var onInputSubmit: ((String, _ openInNewTab: Bool) -> Void)?
     public var onInputCancel: (() -> Void)?
 
     private var cancellables = Set<AnyCancellable>()
@@ -326,15 +326,15 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
         }
     }
 
-    public func submitCurrentInput() {
+    public func submitCurrentInput(openInNewTab: Bool = false, forceRawInput: Bool = false) {
         let input: String
-        if let item = combobox?.selectedItem, !(combobox?.isHidden ?? true) {
+        if !forceRawInput, let item = combobox?.selectedItem, !(combobox?.isHidden ?? true) {
             input = item.id.hasPrefix("tab:") ? item.id : (item.url?.absoluteString ?? item.display)
         } else {
             input = inputTextField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         combobox?.hide()
-        onInputSubmit?(input)
+        onInputSubmit?(input, openInNewTab)
     }
 
     private func runComboboxQuery(_ query: String, debounce: Bool = true) {
@@ -371,8 +371,12 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
     }
 
     public func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
-        if commandSelector == #selector(NSResponder.insertNewline(_:)) {
-            submitCurrentInput()
+        if commandSelector == #selector(NSResponder.insertNewline(_:)) ||
+           commandSelector == #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)) ||
+           commandSelector == #selector(NSResponder.insertLineBreak(_:)) {
+            let modifiers = NSApp.currentEvent?.modifierFlags ?? []
+            let isNewTab = modifiers.contains(.command) || modifiers.contains(.control) || modifiers.contains(.shift)
+            submitCurrentInput(openInNewTab: isNewTab, forceRawInput: isNewTab)
             return true
         } else if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
             combobox?.hide()
