@@ -38,8 +38,13 @@ public final class StatusSlot: ObservableObject {
 public protocol ViewPlugin: AnyObject {
     var id: String { get }
     var order: Int { get }
+    var isFlexible: Bool { get }
     var view: NSView { get }
     func bind(bus: PluginDataBus)
+}
+
+extension ViewPlugin {
+    public var isFlexible: Bool { false }
 }
 
 /// Modal command bar takeover element (e.g. :open, :find, :command).

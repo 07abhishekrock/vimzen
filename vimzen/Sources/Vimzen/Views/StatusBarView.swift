@@ -76,13 +76,13 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
             leftStack.leadingAnchor.constraint(equalTo: leadingAnchor),
             leftStack.topAnchor.constraint(equalTo: topAnchor),
             leftStack.bottomAnchor.constraint(equalTo: bottomAnchor),
-            leftStack.trailingAnchor.constraint(lessThanOrEqualTo: centerStack.leadingAnchor),
+            leftStack.trailingAnchor.constraint(lessThanOrEqualTo: centerStack.leadingAnchor, constant: -8),
 
             // Center slot
             centerStack.centerXAnchor.constraint(equalTo: centerXAnchor),
             centerStack.topAnchor.constraint(equalTo: topAnchor),
             centerStack.bottomAnchor.constraint(equalTo: bottomAnchor),
-            centerStack.trailingAnchor.constraint(lessThanOrEqualTo: rightStack.leadingAnchor),
+            centerStack.trailingAnchor.constraint(lessThanOrEqualTo: rightStack.leadingAnchor, constant: -8),
 
             // Right slot ends at x = width (flush against right window frame)
             rightStack.trailingAnchor.constraint(equalTo: trailingAnchor),
@@ -90,9 +90,9 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
             rightStack.bottomAnchor.constraint(equalTo: bottomAnchor)
         ])
 
-        // Allow leftStack to expand and take available horizontal space across the bar
+        // Allow leftStack (and any flexible plugin inside it) to expand across the full bar up to rightStack
         let expandConstraint = leftStack.trailingAnchor.constraint(equalTo: rightStack.leadingAnchor, constant: -8)
-        expandConstraint.priority = .defaultLow
+        expandConstraint.priority = .defaultHigh - 1
         expandConstraint.isActive = true
 
         setupSlotSubscriptions()
@@ -277,6 +277,13 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
         guard let stack = stack else { return }
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         for plugin in plugins {
+            if plugin.isFlexible {
+                plugin.view.setContentHuggingPriority(.init(1), for: .horizontal)
+                plugin.view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+            } else {
+                plugin.view.setContentHuggingPriority(.defaultHigh, for: .horizontal)
+                plugin.view.setContentCompressionResistancePriority(.required, for: .horizontal)
+            }
             stack.addArrangedSubview(plugin.view)
         }
     }

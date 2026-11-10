@@ -88,50 +88,37 @@ public final class PendingKeysPlugin: ViewPlugin {
     }
 }
 
-// MARK: - Page Identity Plugin (<title> — <url>)
+// MARK: - Page Title Plugin (Flexible width web title)
 
 @MainActor
 public final class PageIdentityPlugin: ViewPlugin {
     public let id = "core.page-identity"
     public let order: Int
+    public let isFlexible: Bool = true
 
     public let view = NSView()
     private let titleLabel = NSTextField(labelWithString: "Vimzen")
-    private let urlLabel = NSTextField(labelWithString: "")
     private var cancellables = Set<AnyCancellable>()
 
     public init(order: Int = 3) {
         self.order = order
 
         view.translatesAutoresizingMaskIntoConstraints = false
-        view.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        view.setContentHuggingPriority(.init(1), for: .horizontal)
         view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         titleLabel.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .semibold)
         titleLabel.textColor = NSColor(calibratedWhite: 0.90, alpha: 1.0)
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        titleLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        titleLabel.setContentHuggingPriority(.init(1), for: .horizontal)
         titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-
-        urlLabel.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
-        urlLabel.textColor = NSColor(calibratedWhite: 0.50, alpha: 1.0)
-        urlLabel.lineBreakMode = .byClipping
-        urlLabel.translatesAutoresizingMaskIntoConstraints = false
-        urlLabel.setContentHuggingPriority(.required, for: .horizontal)
-        urlLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
-
-        let stack = NSStackView(views: [titleLabel, urlLabel])
-        stack.orientation = .horizontal
-        stack.spacing = 6
-        stack.alignment = .centerY
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(stack)
+        view.addSubview(titleLabel)
 
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            stack.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+            titleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            titleLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            titleLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])
     }
 
@@ -143,35 +130,13 @@ public final class PageIdentityPlugin: ViewPlugin {
                 guard let self = self else { return }
                 if title.isEmpty && url == nil {
                     self.titleLabel.stringValue = "Vimzen"
-                    self.urlLabel.stringValue = ""
+                } else if !title.isEmpty {
+                    self.titleLabel.stringValue = title
                 } else {
-                    let displayTitle = title.isEmpty ? (url?.host ?? "Loading...") : title
-                    self.titleLabel.stringValue = displayTitle
-                    self.urlLabel.stringValue = self.formatURL(url)
+                    self.titleLabel.stringValue = url?.host ?? "Loading..."
                 }
             }
             .store(in: &cancellables)
-    }
-
-    /// Strict <= 20 character capping with "..."
-    private func formatURL(_ url: URL?) -> String {
-        guard let url = url else { return "" }
-        var str = url.absoluteString
-
-        if str.hasPrefix("https://") {
-            str = String(str.dropFirst(8))
-        } else if str.hasPrefix("http://") {
-            str = String(str.dropFirst(7))
-        }
-
-        if str.hasSuffix("/") && str.filter({ $0 == "/" }).count == 1 {
-            str = String(str.dropLast())
-        }
-
-        if str.count > 20 {
-            return String(str.prefix(17)) + "..."
-        }
-        return str
     }
 }
 
