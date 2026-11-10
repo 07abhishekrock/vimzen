@@ -58,8 +58,13 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
         // Attach custom userscripts from ~/.config/vimzen/scripts/*.js
         UserScriptManager.shared.attachUserScripts(to: webViewConfiguration.userContentController)
 
+        let darkBg = NSColor(calibratedRed: 0.07, green: 0.07, blue: 0.08, alpha: 1.0)
         self.webView = WKWebView(frame: .zero, configuration: webViewConfiguration)
         self.webView.autoresizingMask = [.width, .height]
+        self.webView.setValue(false, forKey: "drawsBackground")
+        self.webView.underPageBackgroundColor = darkBg
+        self.webView.wantsLayer = true
+        self.webView.layer?.backgroundColor = darkBg.cgColor
 
         super.init()
 
@@ -252,7 +257,8 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
         customTopColor = nil
         detectedTopColor = nil
         updateEffectiveTopColor()
-        webView.loadHTMLString(NewTabTemplate.html(), baseURL: URL(string: "vimzen://newtab"))
+        let savedNotes = ScratchpadStore.loadNotes(for: profileId)
+        webView.loadHTMLString(NewTabTemplate.html(initialNotes: savedNotes), baseURL: URL(string: "vimzen://newtab"))
     }
 
     public func extractTopColor() {

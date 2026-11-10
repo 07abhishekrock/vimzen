@@ -76,6 +76,11 @@ public final class VimzenScriptBridge: NSObject, WKScriptMessageHandler {
                 CommandInputPlugin().onSubmit(input: cmd, controller: mainVC)
             }
 
+        case "saveScratchpad":
+            if let text = body["text"] as? String, let profileId = tab?.profileId {
+                ScratchpadStore.saveNotes(text, for: profileId)
+            }
+
         default:
             break
         }

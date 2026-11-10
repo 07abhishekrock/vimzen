@@ -2,7 +2,7 @@ import Foundation
 
 @MainActor
 public enum NewTabTemplate {
-    public static func html(userName: String = "Abhishek") -> String {
+    public static func html(userName: String = "Abhishek", initialNotes: String = "") -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "d MMM"
         let dateStr = formatter.string(from: Date())
@@ -12,6 +12,7 @@ public enum NewTabTemplate {
         let dayName = dayFormatter.string(from: Date())
 
         let greeting = "Hi, \(userName). Today is \(dateStr) (\(dayName))"
+        let escapedNotes = escapeHTML(initialNotes)
 
         return """
         <!DOCTYPE html>
@@ -78,25 +79,19 @@ public enum NewTabTemplate {
                 <div class="divider"></div>
             </div>
             <div class="editor-container">
-                <textarea id="pad" placeholder="Type markdown notes here... ('i' to edit, 'esc' for normal mode, 'o' to open url)" spellcheck="false" autofocus></textarea>
+                <textarea id="pad" placeholder="Type markdown notes here... ('i' to edit, 'esc' for normal mode, 'o' to open url)" spellcheck="false" autofocus>\(escapedNotes)</textarea>
             </div>
             <script>
                 const pad = document.getElementById('pad');
-                const STORAGE_KEY = 'vimzen_scratchpad_v1';
 
-                // Load saved scratchpad text from local storage (isolated per profile)
-                try {
-                    const saved = localStorage.getItem(STORAGE_KEY);
-                    if (saved !== null) {
-                        pad.value = saved;
-                    }
-                } catch (e) {}
-
-                // Auto-save on every keystroke
+                // Save notes to native Swift on input (which writes to ~/.config or AppSupport .md)
                 pad.addEventListener('input', () => {
-                    try {
-                        localStorage.setItem(STORAGE_KEY, pad.value);
-                    } catch (e) {}
+                    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.vimzen) {
+                        window.webkit.messageHandlers.vimzen.postMessage({
+                            action: 'saveScratchpad',
+                            text: pad.value
+                        });
+                    }
                 });
 
                 // Tab key indents with 2 spaces
@@ -107,14 +102,23 @@ public enum NewTabTemplate {
                         const end = pad.selectionEnd;
                         pad.value = pad.value.substring(0, start) + '  ' + pad.value.substring(end);
                         pad.selectionStart = pad.selectionEnd = start + 2;
-                        try {
-                            localStorage.setItem(STORAGE_KEY, pad.value);
-                        } catch (err) {}
+                        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.vimzen) {
+                            window.webkit.messageHandlers.vimzen.postMessage({
+                                action: 'saveScratchpad',
+                                text: pad.value
+                            });
+                        }
                     }
                 });
             </script>
         </body>
         </html>
         """
+    }
+
+    private static func escapeHTML(_ text: String) -> String {
+        text.replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
     }
 }
