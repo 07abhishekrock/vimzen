@@ -41,6 +41,10 @@ public final class WindowDragHeaderView: NSView {
     }
 
     public override func mouseDown(with event: NSEvent) {
+        if event.clickCount == 2 {
+            window?.zoom(nil)
+            return
+        }
         window?.performDrag(with: event)
     }
 }

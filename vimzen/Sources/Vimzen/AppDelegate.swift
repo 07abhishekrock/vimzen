@@ -8,11 +8,11 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     public func applicationDidFinishLaunching(_ notification: Notification) {
         setupApplicationMenu()
 
-        let screen = NSScreen.main
-        let initialFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+        let defaultWidth: CGFloat = 1240
+        let defaultHeight: CGFloat = 800
 
         let window = KeyInterceptingWindow(
-            contentRect: initialFrame,
+            contentRect: NSRect(x: 0, y: 0, width: defaultWidth, height: defaultHeight),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView, .fullScreen],
             backing: .buffered,
             defer: false
@@ -21,10 +21,22 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         window.title = "Vimzen"
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
-        window.setFrame(initialFrame, display: true)
-        window.setFrameAutosaveName("VimzenMainWindow")
+        window.hasShadow = true
         window.isReleasedWhenClosed = false
         window.backgroundColor = NSColor(calibratedWhite: 0.08, alpha: 1.0)
+        window.minSize = NSSize(width: 640, height: 400)
+
+        // Restore user's saved window position and size; default to centered 1240x800 on first launch
+        window.setFrameAutosaveName("VimzenMainWindow")
+        if !window.setFrameUsingName("VimzenMainWindow") {
+            if let screen = NSScreen.main {
+                let x = (screen.visibleFrame.width - defaultWidth) / 2 + screen.visibleFrame.minX
+                let y = (screen.visibleFrame.height - defaultHeight) / 2 + screen.visibleFrame.minY
+                window.setFrame(NSRect(x: x, y: y, width: defaultWidth, height: defaultHeight), display: true)
+            } else {
+                window.center()
+            }
+        }
 
         let controller = MainViewController()
         window.contentViewController = controller
