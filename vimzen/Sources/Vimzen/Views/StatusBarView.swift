@@ -51,18 +51,23 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
         leftStack.orientation = .horizontal
         leftStack.spacing = 8
         leftStack.alignment = .centerY
+        leftStack.distribution = .fill
+        leftStack.setHuggingPriority(.defaultLow, for: .horizontal)
         leftStack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(leftStack)
 
         centerStack.orientation = .horizontal
         centerStack.spacing = 8
         centerStack.alignment = .centerY
+        centerStack.distribution = .fill
         centerStack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(centerStack)
 
         rightStack.orientation = .horizontal
         rightStack.spacing = 8
         rightStack.alignment = .centerY
+        rightStack.distribution = .fill
+        rightStack.setHuggingPriority(.required, for: .horizontal)
         rightStack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(rightStack)
 
@@ -76,24 +81,15 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
             leftStack.leadingAnchor.constraint(equalTo: leadingAnchor),
             leftStack.topAnchor.constraint(equalTo: topAnchor),
             leftStack.bottomAnchor.constraint(equalTo: bottomAnchor),
-            leftStack.trailingAnchor.constraint(lessThanOrEqualTo: centerStack.leadingAnchor, constant: -8),
 
-            // Center slot
-            centerStack.centerXAnchor.constraint(equalTo: centerXAnchor),
-            centerStack.topAnchor.constraint(equalTo: topAnchor),
-            centerStack.bottomAnchor.constraint(equalTo: bottomAnchor),
-            centerStack.trailingAnchor.constraint(lessThanOrEqualTo: rightStack.leadingAnchor, constant: -8),
-
-            // Right slot ends at x = width (flush against right window frame)
+            // Right slot hugs its content tightly and stays at the extreme right
             rightStack.trailingAnchor.constraint(equalTo: trailingAnchor),
             rightStack.topAnchor.constraint(equalTo: topAnchor),
-            rightStack.bottomAnchor.constraint(equalTo: bottomAnchor)
-        ])
+            rightStack.bottomAnchor.constraint(equalTo: bottomAnchor),
 
-        // Allow leftStack (and any flexible plugin inside it) to expand across the full bar up to rightStack
-        let expandConstraint = leftStack.trailingAnchor.constraint(equalTo: rightStack.leadingAnchor, constant: -8)
-        expandConstraint.priority = .defaultHigh - 1
-        expandConstraint.isActive = true
+            // Left stack (and flexible title inside) expands across full bar, pushing right items to the extreme right
+            leftStack.trailingAnchor.constraint(equalTo: rightStack.leadingAnchor, constant: -16)
+        ])
 
         setupSlotSubscriptions()
     }
@@ -281,7 +277,7 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
                 plugin.view.setContentHuggingPriority(.init(1), for: .horizontal)
                 plugin.view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
             } else {
-                plugin.view.setContentHuggingPriority(.defaultHigh, for: .horizontal)
+                plugin.view.setContentHuggingPriority(.required, for: .horizontal)
                 plugin.view.setContentCompressionResistancePriority(.required, for: .horizontal)
             }
             stack.addArrangedSubview(plugin.view)
