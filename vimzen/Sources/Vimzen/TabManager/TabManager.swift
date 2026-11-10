@@ -69,6 +69,44 @@ public final class TabManager: ObservableObject {
         switchToTab(id: tabs[prevIndex].id)
     }
 
+    public func nextSameDomainTab(count: Int = 1) {
+        cycleSameDomainTab(delta: count)
+    }
+
+    public func previousSameDomainTab(count: Int = 1) {
+        cycleSameDomainTab(delta: -count)
+    }
+
+    private func cycleSameDomainTab(delta: Int) {
+        guard let current = activeTab, let host = current.url?.host else {
+            let toast = NotificationToast(message: "Current tab has no web domain", duration: 2.0)
+            PluginRegistry.shared.showToast(toast)
+            return
+        }
+        let currentDomain = normalizeDomain(host)
+        guard !currentDomain.isEmpty else { return }
+
+        let sameDomainTabs = tabs.filter { tab in
+            guard let h = tab.url?.host else { return false }
+            return normalizeDomain(h) == currentDomain
+        }
+
+        guard sameDomainTabs.count > 1 else {
+            let toast = NotificationToast(message: "Only 1 tab for \(currentDomain)", duration: 2.0)
+            PluginRegistry.shared.showToast(toast)
+            return
+        }
+
+        guard let currentIndex = sameDomainTabs.firstIndex(where: { $0.id == current.id }) else { return }
+        let total = sameDomainTabs.count
+        let nextIndex = ((currentIndex + delta) % total + total) % total
+        switchToTab(id: sameDomainTabs[nextIndex].id)
+    }
+
+    private func normalizeDomain(_ host: String) -> String {
+        host.lowercased().replacingOccurrences(of: "^www\\.", with: "", options: .regularExpression)
+    }
+
     public func closeActiveTab() {
         guard let activeId = activeTabId else { return }
         closeTab(id: activeId)

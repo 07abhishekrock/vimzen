@@ -207,6 +207,14 @@ public final class KeyEngine: ObservableObject {
             tabManager.previousTab()
             clearBuffer()
             return true
+        case "gd":
+            tabManager.nextSameDomainTab(count: count)
+            clearBuffer()
+            return true
+        case "gD":
+            tabManager.previousSameDomainTab(count: count)
+            clearBuffer()
+            return true
         case "x", ":q":
             // Close tab and display 4s interactive undo toast (§10.4)
             if let closing = activeTab {
