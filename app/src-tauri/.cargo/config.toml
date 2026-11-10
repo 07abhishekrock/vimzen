@@ -1,3 +1,0 @@
-[env]
-CEF_PATH = "/Users/abhishek.jha/.local/share/cef"
-DYLD_FALLBACK_LIBRARY_PATH = "/Users/abhishek.jha/.local/share/cef:/Users/abhishek.jha/.local/share/cef/Chromium Embedded Framework.framework/Libraries"

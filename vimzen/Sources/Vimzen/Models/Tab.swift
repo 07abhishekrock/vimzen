@@ -1,0 +1,132 @@
+import AppKit
+import WebKit
+import Combine
+
+@MainActor
+public final class Tab: Identifiable, ObservableObject {
+    public let id: UUID
+    public let webView: WKWebView
+
+    @Published public var title: String = ""
+    @Published public var url: URL?
+    @Published public var faviconURL: URL?
+    @Published public var isLoading: Bool = false
+    @Published public var estimatedProgress: Double = 0.0
+    @Published public var canGoBack: Bool = false
+    @Published public var canGoForward: Bool = false
+
+    private var cancellables = Set<AnyCancellable>()
+
+    public init(id: UUID = UUID(), webViewConfiguration: WKWebViewConfiguration = WKWebViewConfiguration()) {
+        self.id = id
+
+        // Configure modern WKWebView settings
+        webViewConfiguration.allowsAirPlayForMediaPlayback = true
+        let preferences = WKWebpagePreferences()
+        preferences.allowsContentJavaScript = true
+        webViewConfiguration.defaultWebpagePreferences = preferences
+
+        self.webView = WKWebView(frame: .zero, configuration: webViewConfiguration)
+        self.webView.autoresizingMask = [.width, .height]
+
+        setupObservers()
+    }
+
+    private func setupObservers() {
+        // Observe document title changes
+        webView.publisher(for: \.title)
+            .compactMap { $0 }
+            .receive(on: RunLoop.main)
+            .sink { [weak self] newTitle in
+                guard let self = self else { return }
+                if !newTitle.isEmpty {
+                    self.title = newTitle
+                } else if let host = self.webView.url?.host {
+                    self.title = host
+                }
+            }
+            .store(in: &cancellables)
+
+        // Observe URL changes (including client-side SPA route changes)
+        webView.publisher(for: \.url)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] newURL in
+                guard let self = self else { return }
+                self.url = newURL
+                if self.title.isEmpty, let host = newURL?.host {
+                    self.title = host
+                }
+                self.deriveFaviconURL(for: newURL)
+            }
+            .store(in: &cancellables)
+
+        // Observe loading state
+        webView.publisher(for: \.isLoading)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] loading in
+                guard let self = self else { return }
+                self.isLoading = loading
+            }
+            .store(in: &cancellables)
+
+        // Observe estimated progress
+        webView.publisher(for: \.estimatedProgress)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] progress in
+                guard let self = self else { return }
+                self.estimatedProgress = progress
+            }
+            .store(in: &cancellables)
+
+        // Observe back / forward state
+        webView.publisher(for: \.canGoBack)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] back in self?.canGoBack = back }
+            .store(in: &cancellables)
+
+        webView.publisher(for: \.canGoForward)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] forward in self?.canGoForward = forward }
+            .store(in: &cancellables)
+    }
+
+    private func deriveFaviconURL(for pageURL: URL?) {
+        guard let pageURL = pageURL,
+              let scheme = pageURL.scheme,
+              let host = pageURL.host else {
+            faviconURL = nil
+            return
+        }
+        faviconURL = URL(string: "\(scheme)://\(host)/favicon.ico")
+    }
+
+    public func load(url: URL) {
+        let request = URLRequest(url: url)
+        webView.load(request)
+    }
+
+    public func scrollBy(dx: CGFloat, dy: CGFloat) {
+        let script = "window.scrollBy({ left: \(dx), top: \(dy), behavior: 'instant' });"
+        webView.evaluateJavaScript(script, completionHandler: nil)
+    }
+
+    public func scrollToTop() {
+        webView.evaluateJavaScript("window.scrollTo(0, 0);", completionHandler: nil)
+    }
+
+    public func scrollToBottom() {
+        webView.evaluateJavaScript("window.scrollTo(0, document.body.scrollHeight);", completionHandler: nil)
+    }
+
+    public func reload() {
+        webView.reload()
+    }
+
+    public func goBack() {
+        webView.goBack()
+    }
+
+    public func goForward() {
+        webView.goForward()
+    }
+}
