@@ -282,6 +282,10 @@ public final class CommandInputPlugin: InputPlugin {
             mainVC.tabManager.activeTab?.reload()
             let count = UserScriptManager.shared.loadScripts().count
             PluginRegistry.shared.showToast(NotificationToast(message: "Reloaded \(count) userscript(s)", duration: 2.0))
+        case ":version", "version", ":v", "v":
+            let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+            let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "dev"
+            PluginRegistry.shared.showToast(NotificationToast(message: "Vimzen v\(version) (\(build)) · macOS 14+ · Swift 6", duration: 3.0))
         case ":help", "help", ":h", "h":
             mainVC.tabManager.activeTab?.loadHelpTemplate()
         case _ where cmd.starts(with: ":alias ") || cmd.starts(with: "alias "):

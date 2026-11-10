@@ -41,6 +41,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
+    public func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls {
+            mainViewController?.tabManager.createTab(url: url, activate: true)
+        }
+    }
+
     private func setupApplicationMenu() {
         let mainMenu = NSMenu()
 
