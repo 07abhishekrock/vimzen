@@ -86,7 +86,29 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         viewMenuItem.submenu = viewMenu
         mainMenu.addItem(viewMenuItem)
 
+        // History Menu
+        let historyMenuItem = NSMenuItem()
+        let historyMenu = NSMenu(title: "History")
+        let backItem = NSMenuItem(title: "Back", action: #selector(backMenuAction), keyEquivalent: "[")
+        backItem.target = self
+        historyMenu.addItem(backItem)
+
+        let forwardItem = NSMenuItem(title: "Forward", action: #selector(forwardMenuAction), keyEquivalent: "]")
+        forwardItem.target = self
+        historyMenu.addItem(forwardItem)
+
+        historyMenuItem.submenu = historyMenu
+        mainMenu.addItem(historyMenuItem)
+
         NSApp.mainMenu = mainMenu
+    }
+
+    @objc private func backMenuAction() {
+        mainViewController?.tabManager.activeTab?.goBack()
+    }
+
+    @objc private func forwardMenuAction() {
+        mainViewController?.tabManager.activeTab?.goForward()
     }
 
     @objc private func newTabMenuAction() {

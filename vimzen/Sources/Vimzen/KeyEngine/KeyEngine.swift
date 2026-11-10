@@ -106,7 +106,20 @@ public final class KeyEngine: ObservableObject {
             guard let chars = event.characters, !chars.isEmpty else {
                 return false
             }
-            if event.keyCode == 48 {
+            let isShift = event.modifierFlags.contains(.shift)
+            if isShift, let base = event.charactersIgnoringModifiers?.lowercased() {
+                switch base {
+                case "h": chord = "H"
+                case "l": chord = "L"
+                case "g": chord = "G"
+                case "o": chord = "O"
+                case "r": chord = "R"
+                case "t": chord = "T"
+                case "d": chord = "D"
+                case "p": chord = "P"
+                default:  chord = chars
+                }
+            } else if event.keyCode == 48 {
                 chord = "<Tab>"
             } else {
                 chord = chars

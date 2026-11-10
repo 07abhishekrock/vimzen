@@ -248,11 +248,11 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
     public func loadNewTabTemplate() {
         isNewTabScratchpad = true
         title = "New Tab"
-        url = nil
+        url = URL(string: "vimzen://newtab")
         customTopColor = nil
         detectedTopColor = nil
         updateEffectiveTopColor()
-        webView.loadHTMLString(NewTabTemplate.html(), baseURL: nil)
+        webView.loadHTMLString(NewTabTemplate.html(), baseURL: URL(string: "vimzen://newtab"))
     }
 
     public func extractTopColor() {
@@ -322,26 +322,34 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
     }
 
     public func goBack(count: Int = 1) {
-        let backList = webView.backForwardList.backList
-        if count <= 1 {
-            if webView.canGoBack {
+        if webView.canGoBack {
+            let backList = webView.backForwardList.backList
+            if count <= 1 {
                 webView.goBack()
+            } else if !backList.isEmpty {
+                let targetIndex = max(0, backList.count - count)
+                webView.go(to: backList[targetIndex])
             }
-        } else if !backList.isEmpty {
-            let targetIndex = max(0, backList.count - count)
-            webView.go(to: backList[targetIndex])
+        } else {
+            PluginRegistry.shared.showToast(
+                NotificationToast(message: "Already at oldest page in history", duration: 1.5)
+            )
         }
     }
 
     public func goForward(count: Int = 1) {
-        let forwardList = webView.backForwardList.forwardList
-        if count <= 1 {
-            if webView.canGoForward {
+        if webView.canGoForward {
+            let forwardList = webView.backForwardList.forwardList
+            if count <= 1 {
                 webView.goForward()
+            } else if !forwardList.isEmpty {
+                let targetIndex = min(forwardList.count - 1, count - 1)
+                webView.go(to: forwardList[targetIndex])
             }
-        } else if !forwardList.isEmpty {
-            let targetIndex = min(forwardList.count - 1, count - 1)
-            webView.go(to: forwardList[targetIndex])
+        } else {
+            PluginRegistry.shared.showToast(
+                NotificationToast(message: "Already at newest page in history", duration: 1.5)
+            )
         }
     }
 
