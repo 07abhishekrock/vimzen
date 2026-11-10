@@ -3,7 +3,7 @@ import WebKit
 import Combine
 
 @MainActor
-public final class Tab: Identifiable, ObservableObject {
+public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDelegate {
     public let id: UUID
     public let webView: WKWebView
 
@@ -29,11 +29,14 @@ public final class Tab: Identifiable, ObservableObject {
         self.webView = WKWebView(frame: .zero, configuration: webViewConfiguration)
         self.webView.autoresizingMask = [.width, .height]
 
+        super.init()
+
+        self.webView.navigationDelegate = self
         setupObservers()
     }
 
     private func setupObservers() {
-        // Observe document title changes
+        // Observe document title changes (fires on static loads and dynamic SPA updates)
         webView.publisher(for: \.title)
             .compactMap { $0 }
             .receive(on: RunLoop.main)
@@ -47,7 +50,7 @@ public final class Tab: Identifiable, ObservableObject {
             }
             .store(in: &cancellables)
 
-        // Observe URL changes (including client-side SPA route changes)
+        // Observe URL changes (including pushState / client-side SPA routing)
         webView.publisher(for: \.url)
             .receive(on: RunLoop.main)
             .sink { [weak self] newURL in
@@ -78,7 +81,7 @@ public final class Tab: Identifiable, ObservableObject {
             }
             .store(in: &cancellables)
 
-        // Observe back / forward state
+        // Observe back / forward navigation availability
         webView.publisher(for: \.canGoBack)
             .receive(on: RunLoop.main)
             .sink { [weak self] back in self?.canGoBack = back }
@@ -89,6 +92,42 @@ public final class Tab: Identifiable, ObservableObject {
             .sink { [weak self] forward in self?.canGoForward = forward }
             .store(in: &cancellables)
     }
+
+    // MARK: - WKNavigationDelegate
+
+    public func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        self.isLoading = true
+        if let host = webView.url?.host {
+            if self.title.isEmpty {
+                self.title = host
+            }
+        }
+    }
+
+    public func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        if let newTitle = webView.title, !newTitle.isEmpty {
+            self.title = newTitle
+        }
+        self.url = webView.url
+    }
+
+    public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        self.isLoading = false
+        if let newTitle = webView.title, !newTitle.isEmpty {
+            self.title = newTitle
+        }
+        self.url = webView.url
+    }
+
+    public func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        self.isLoading = false
+    }
+
+    public func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        self.isLoading = false
+    }
+
+    // MARK: - Navigation & Actions
 
     private func deriveFaviconURL(for pageURL: URL?) {
         guard let pageURL = pageURL,

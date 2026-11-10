@@ -12,6 +12,7 @@ public final class StatusBarView: NSView {
     private let tabsCountLabel = NSTextField(labelWithString: "0 tabs")
 
     private var cancellables = Set<AnyCancellable>()
+    private var activeTabCancellables = Set<AnyCancellable>()
 
     public override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -128,15 +129,21 @@ public final class StatusBarView: NSView {
             }
             .store(in: &cancellables)
 
+        // Watch for active tab identity changes and rebind observers
         tabManager.$activeTabId
             .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
-                self?.updateForActiveTab(tabManager.activeTab)
+            .sink { [weak self, weak tabManager] _ in
+                guard let self = self, let tm = tabManager else { return }
+                self.updateForActiveTab(tm.activeTab)
             }
             .store(in: &cancellables)
+
+        updateForActiveTab(tabManager.activeTab)
     }
 
     public func updateForActiveTab(_ tab: Tab?) {
+        activeTabCancellables.removeAll()
+
         guard let tab = tab else {
             titleLabel.stringValue = "Vimzen"
             urlLabel.stringValue = "Zen workspace — press 'o' to open URL"
@@ -145,16 +152,32 @@ public final class StatusBarView: NSView {
             return
         }
 
-        titleLabel.stringValue = tab.title.isEmpty ? (tab.url?.host ?? "New Tab") : tab.title
-        urlLabel.stringValue = tab.url?.absoluteString ?? ""
+        // Live Combine subscription to title & url changes
+        Publishers.CombineLatest(tab.$title, tab.$url)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] (title, url) in
+                guard let self = self else { return }
+                let displayTitle = title.isEmpty ? (url?.host ?? "Loading...") : title
+                self.titleLabel.stringValue = displayTitle
+                self.urlLabel.stringValue = url?.absoluteString ?? ""
+            }
+            .store(in: &activeTabCancellables)
 
-        if tab.isLoading {
-            statusIndicator.stringValue = "\(Int(tab.estimatedProgress * 100))%"
-            progressIndicator.startAnimation(nil)
-        } else {
-            statusIndicator.stringValue = "Ready"
-            progressIndicator.stopAnimation(nil)
-        }
+        // Live Combine subscription to loading & progress changes
+        Publishers.CombineLatest(tab.$isLoading, tab.$estimatedProgress)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] (isLoading, progress) in
+                guard let self = self else { return }
+                if isLoading && progress < 1.0 {
+                    let percent = max(10, Int(progress * 100))
+                    self.statusIndicator.stringValue = "\(percent)%"
+                    self.progressIndicator.startAnimation(nil)
+                } else {
+                    self.statusIndicator.stringValue = "Ready"
+                    self.progressIndicator.stopAnimation(nil)
+                }
+            }
+            .store(in: &activeTabCancellables)
     }
 
     private func updateModeBadge(mode: Mode) {
