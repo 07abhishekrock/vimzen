@@ -14,6 +14,11 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
     @Published public var estimatedProgress: Double = 0.0
     @Published public var canGoBack: Bool = false
     @Published public var canGoForward: Bool = false
+    public private(set) var lastActiveAt: Date = Date()
+
+    public func markActive() {
+        lastActiveAt = Date()
+    }
 
     private var cancellables = Set<AnyCancellable>()
 

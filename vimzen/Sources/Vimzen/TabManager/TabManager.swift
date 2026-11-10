@@ -49,6 +49,7 @@ public final class TabManager: ObservableObject {
             let isActive = tab.id == id
             tab.webView.isHidden = !isActive
             if isActive {
+                tab.markActive()
                 containerView.window?.makeFirstResponder(tab.webView)
             }
         }
