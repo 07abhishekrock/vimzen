@@ -129,6 +129,7 @@ public final class MainViewController: NSViewController {
 public final class OpenNewTabInputPlugin: InputPlugin {
     public let id = "input.open-new-tab"
     public let prompt = "NEW TAB"
+    public let promptIconName: String? = "globe"
     public let commandAliases = [":tabnew", ":t"]
     public let placeholder = "Enter URL for new tab (e.g. groww.in)..."
 

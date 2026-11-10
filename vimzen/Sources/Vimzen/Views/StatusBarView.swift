@@ -16,7 +16,7 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
     // Input Plugin Takeover View
     private let inputTakeoverView = NSView()
     private let promptContainer = NSView()
-    private let promptLabel = NSTextField(labelWithString: "OPEN")
+    private let promptIconView = NSImageView()
     private let promptArrow = NSTextField(labelWithString: "❯")
     public let inputTextField = NSTextField()
     private let inputHintLabel = NSTextField(labelWithString: "esc: cancel   ↵: confirm")
@@ -154,10 +154,10 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
         promptContainer.layer?.cornerRadius = 0
         promptContainer.translatesAutoresizingMaskIntoConstraints = false
 
-        promptLabel.font = NSFont.monospacedSystemFont(ofSize: 10, weight: .heavy)
-        promptLabel.textColor = .white
-        promptLabel.translatesAutoresizingMaskIntoConstraints = false
-        promptContainer.addSubview(promptLabel)
+        promptIconView.imageScaling = .scaleProportionallyDown
+        promptIconView.contentTintColor = .white
+        promptIconView.translatesAutoresizingMaskIntoConstraints = false
+        promptContainer.addSubview(promptIconView)
 
         promptArrow.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .bold)
         promptArrow.textColor = NSColor(calibratedRed: 0.20, green: 0.60, blue: 1.00, alpha: 1.0)
@@ -189,14 +189,16 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
             inputTakeoverView.topAnchor.constraint(equalTo: topAnchor),
             inputTakeoverView.bottomAnchor.constraint(equalTo: bottomAnchor),
 
-            // Flush against left edge with full 26px height
+            // Flush against left edge with 32px width and full 26px height
             promptContainer.leadingAnchor.constraint(equalTo: inputTakeoverView.leadingAnchor),
             promptContainer.topAnchor.constraint(equalTo: inputTakeoverView.topAnchor),
             promptContainer.bottomAnchor.constraint(equalTo: inputTakeoverView.bottomAnchor),
+            promptContainer.widthAnchor.constraint(equalToConstant: 32),
 
-            promptLabel.leadingAnchor.constraint(equalTo: promptContainer.leadingAnchor, constant: 8),
-            promptLabel.trailingAnchor.constraint(equalTo: promptContainer.trailingAnchor, constant: -8),
-            promptLabel.centerYAnchor.constraint(equalTo: promptContainer.centerYAnchor),
+            promptIconView.centerXAnchor.constraint(equalTo: promptContainer.centerXAnchor),
+            promptIconView.centerYAnchor.constraint(equalTo: promptContainer.centerYAnchor),
+            promptIconView.widthAnchor.constraint(equalToConstant: 14),
+            promptIconView.heightAnchor.constraint(equalToConstant: 14),
 
             promptArrow.leadingAnchor.constraint(equalTo: promptContainer.trailingAnchor, constant: 6),
             promptArrow.centerYAnchor.constraint(equalTo: inputTakeoverView.centerYAnchor),
@@ -285,7 +287,11 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
     }
 
     private func showInputTakeover(plugin: InputPlugin) {
-        promptLabel.stringValue = plugin.prompt
+        let iconName = plugin.promptIconName ?? "terminal"
+        let config = NSImage.SymbolConfiguration(pointSize: 11, weight: .bold)
+        promptIconView.image = NSImage(systemSymbolName: iconName, accessibilityDescription: plugin.prompt)?.withSymbolConfiguration(config)
+        promptIconView.contentTintColor = .white
+
         inputTextField.placeholderString = plugin.placeholder
         inputTakeoverView.isHidden = false
         window?.makeFirstResponder(inputTextField)

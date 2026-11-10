@@ -6,6 +6,7 @@ import AppKit
 public final class OpenUrlInputPlugin: InputPlugin {
     public let id = "input.open"
     public let prompt = "OPEN"
+    public let promptIconName: String? = "globe"
     public let commandAliases = [":open", ":o"]
     public let placeholder = "Enter URL or search query (e.g. groww.in, github.com)..."
 
@@ -53,6 +54,7 @@ public final class OpenUrlInputPlugin: InputPlugin {
 public final class CommandInputPlugin: InputPlugin {
     public let id = "input.command"
     public let prompt = "COMMAND"
+    public let promptIconName: String? = "command"
     public let commandAliases = [":"]
     public let placeholder = ":q to close, :qa to quit, :r to reload, :open <url>"
 

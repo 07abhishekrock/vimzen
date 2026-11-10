@@ -47,10 +47,15 @@ public protocol ViewPlugin: AnyObject {
 public protocol InputPlugin: AnyObject {
     var id: String { get }
     var prompt: String { get }
+    var promptIconName: String? { get }
     var commandAliases: [String] { get }
     var placeholder: String { get }
     func onSubmit(input: String, controller: AnyObject?)
     func onCancel(controller: AnyObject?)
+}
+
+extension InputPlugin {
+    public var promptIconName: String? { nil }
 }
 
 /// Transient status bar toast notification with optional interactive shortcut key.

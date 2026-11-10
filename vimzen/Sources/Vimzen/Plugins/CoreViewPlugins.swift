@@ -9,7 +9,7 @@ public final class ModeBadgePlugin: ViewPlugin {
     public let order: Int
 
     public let view = NSView()
-    private let label = NSTextField(labelWithString: "NORMAL")
+    private let iconView = NSImageView()
     private var cancellables = Set<AnyCancellable>()
 
     public init(order: Int = 1) {
@@ -20,16 +20,18 @@ public final class ModeBadgePlugin: ViewPlugin {
         view.layer?.masksToBounds = true
         view.translatesAutoresizingMaskIntoConstraints = false
 
-        label.font = NSFont.monospacedSystemFont(ofSize: 10, weight: .heavy)
-        label.alignment = .center
-        label.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(label)
+        iconView.imageScaling = .scaleProportionallyDown
+        iconView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(iconView)
 
         NSLayoutConstraint.activate([
             view.heightAnchor.constraint(equalToConstant: 26),
-            label.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 8),
-            label.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -8),
-            label.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+            view.widthAnchor.constraint(equalToConstant: 32),
+
+            iconView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            iconView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            iconView.widthAnchor.constraint(equalToConstant: 14),
+            iconView.heightAnchor.constraint(equalToConstant: 14)
         ])
     }
 
@@ -38,8 +40,9 @@ public final class ModeBadgePlugin: ViewPlugin {
         bus.$mode
             .receive(on: RunLoop.main)
             .sink { [weak self] mode in
-                self?.label.stringValue = mode.badgeText
-                self?.label.textColor = mode.badgeTextColor
+                let config = NSImage.SymbolConfiguration(pointSize: 11, weight: .bold)
+                self?.iconView.image = NSImage(systemSymbolName: mode.symbolIconName, accessibilityDescription: mode.rawValue)?.withSymbolConfiguration(config)
+                self?.iconView.contentTintColor = mode.badgeTextColor
                 self?.view.layer?.backgroundColor = mode.badgeBackgroundColor.cgColor
             }
             .store(in: &cancellables)

@@ -11,6 +11,22 @@ public enum Mode: String, CaseIterable, Sendable {
         return rawValue
     }
 
+    /// SF Symbol icon representing the mode
+    public var symbolIconName: String {
+        switch self {
+        case .normal:
+            return "eye.fill"            // Eye icon for view mode
+        case .insert:
+            return "cursorarrow"         // Pointer cursor arrow for interaction mode
+        case .search:
+            return "magnifyingglass"     // Search icon
+        case .hint:
+            return "hand.tap.fill"       // Hint / link-activation mode
+        case .command:
+            return "command"             // Apple Command icon
+        }
+    }
+
     public var badgeBackgroundColor: NSColor {
         switch self {
         case .normal:
