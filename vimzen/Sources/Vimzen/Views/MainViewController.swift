@@ -7,6 +7,7 @@ public final class MainViewController: NSViewController {
 
     private let dragHeader = WindowDragHeaderView()
     private let statusBar = StatusBarView()
+    private let combobox = ComboboxView()
 
     public override func loadView() {
         view = NSView(frame: NSRect(x: 0, y: 0, width: 1024, height: 720))
@@ -32,8 +33,8 @@ public final class MainViewController: NSViewController {
         registry.registerViewPlugin(TabsCountPlugin(order: 20), into: .right)
 
         // Category 2: Input Plugins (Command Bar Takeovers per Architecture §10.3)
-        registry.registerInputPlugin(OpenUrlInputPlugin(inNewTab: false))
-        registry.registerInputPlugin(OpenNewTabInputPlugin())
+        registry.registerInputPlugin(OpenUrlInputPlugin(tabManager: tabManager, inNewTab: false))
+        registry.registerInputPlugin(OpenNewTabInputPlugin(tabManager: tabManager))
         registry.registerInputPlugin(CommandInputPlugin())
     }
 
@@ -51,6 +52,10 @@ public final class MainViewController: NSViewController {
         statusBar.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(statusBar)
 
+        // Upward-opening combobox dropdown (docked directly above status bar)
+        combobox.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(combobox)
+
         NSLayoutConstraint.activate([
             // Top drag header
             dragHeader.topAnchor.constraint(equalTo: view.topAnchor),
@@ -64,6 +69,11 @@ public final class MainViewController: NSViewController {
             container.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             container.bottomAnchor.constraint(equalTo: statusBar.topAnchor),
 
+            // Combobox dropdown docks directly above status bar
+            combobox.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 8),
+            combobox.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -8),
+            combobox.bottomAnchor.constraint(equalTo: statusBar.topAnchor, constant: -4),
+
             // Status bar at bottom (26px)
             statusBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             statusBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
@@ -73,7 +83,19 @@ public final class MainViewController: NSViewController {
     }
 
     private func setupBindings() {
+        statusBar.combobox = combobox
         statusBar.bind(keyEngine: keyEngine, tabManager: tabManager)
+
+        combobox.onCommitSelection = { [weak self] item in
+            guard let self = self else { return }
+            let target = item.url?.absoluteString ?? item.display
+            self.statusBar.inputTextField.stringValue = target
+            self.statusBar.submitCurrentInput()
+        }
+
+        keyEngine.onComboboxMove = { [weak self] delta in
+            self?.combobox.moveSelection(by: delta)
+        }
 
         // Trigger input plugin takeover (e.g. 'o', 'O', ':')
         keyEngine.onTriggerInputPlugin = { [weak self] pluginId in
@@ -108,6 +130,7 @@ public final class MainViewController: NSViewController {
     }
 
     private func finishCurrentInput() {
+        combobox.hide()
         PluginRegistry.shared.deactivateInputPlugin()
         keyEngine.setMode(.normal)
         if let activeWebView = tabManager.activeTab?.webView {
@@ -116,6 +139,7 @@ public final class MainViewController: NSViewController {
     }
 
     private func cancelCurrentInput() {
+        combobox.hide()
         PluginRegistry.shared.deactivateInputPlugin()
         keyEngine.setMode(.normal)
         if let activeWebView = tabManager.activeTab?.webView {
@@ -132,8 +156,17 @@ public final class OpenNewTabInputPlugin: InputPlugin {
     public let promptIconName: String? = "globe"
     public let commandAliases = [":tabnew", ":t"]
     public let placeholder = "Enter URL for new tab (e.g. groww.in)..."
+    public let isComboboxEnabled: Bool = true
 
-    private let inner = OpenUrlInputPlugin(inNewTab: true)
+    private let inner: OpenUrlInputPlugin
+
+    public init(tabManager: TabManager? = nil) {
+        self.inner = OpenUrlInputPlugin(tabManager: tabManager, inNewTab: true)
+    }
+
+    public func queryItems(query: String) async -> [RankedResult] {
+        await inner.queryItems(query: query)
+    }
 
     public func onSubmit(input: String, controller: AnyObject?) {
         inner.onSubmit(input: input, controller: controller)

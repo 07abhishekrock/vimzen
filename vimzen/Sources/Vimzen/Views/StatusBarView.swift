@@ -21,6 +21,9 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
     public let inputTextField = NSTextField()
     private let inputHintLabel = NSTextField(labelWithString: "esc: cancel   ↵: confirm")
 
+    public weak var combobox: ComboboxView?
+    private var queryTask: Task<Void, Never>?
+
     public var onInputSubmit: ((String) -> Void)?
     public var onInputCancel: (() -> Void)?
 
@@ -298,10 +301,18 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
         inputTextField.placeholderString = plugin.placeholder
         inputTakeoverView.isHidden = false
         window?.makeFirstResponder(inputTextField)
+
+        if plugin.isComboboxEnabled {
+            runComboboxQuery(inputTextField.stringValue, debounce: false)
+        } else {
+            combobox?.hide()
+        }
     }
 
     private func hideInputTakeover() {
         inputTakeoverView.isHidden = true
+        queryTask?.cancel()
+        combobox?.hide()
     }
 
     public func activateInput(prefill: String = "") {
@@ -310,17 +321,66 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
         if !prefill.isEmpty {
             inputTextField.selectText(nil)
         }
+        if let plugin = PluginRegistry.shared.activeInputPlugin, plugin.isComboboxEnabled {
+            runComboboxQuery(prefill, debounce: false)
+        }
+    }
+
+    public func submitCurrentInput() {
+        let input: String
+        if let item = combobox?.selectedItem, !(combobox?.isHidden ?? true) {
+            input = item.url?.absoluteString ?? item.display
+        } else {
+            input = inputTextField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        combobox?.hide()
+        onInputSubmit?(input)
+    }
+
+    private func runComboboxQuery(_ query: String, debounce: Bool = true) {
+        queryTask?.cancel()
+        queryTask = Task { @MainActor [weak self] in
+            if debounce {
+                try? await Task.sleep(nanoseconds: 120_000_000)
+            }
+            guard !Task.isCancelled, let self = self else { return }
+            guard let plugin = PluginRegistry.shared.activeInputPlugin, plugin.isComboboxEnabled else {
+                self.combobox?.hide()
+                return
+            }
+
+            let results = await plugin.queryItems(query: query)
+            guard !Task.isCancelled else { return }
+            self.combobox?.updateItems(results)
+        }
     }
 
     // MARK: - NSTextFieldDelegate
 
+    public func controlTextDidChange(_ obj: Notification) {
+        if let plugin = PluginRegistry.shared.activeInputPlugin, plugin.isComboboxEnabled {
+            runComboboxQuery(inputTextField.stringValue, debounce: true)
+        }
+    }
+
     public func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
         if commandSelector == #selector(NSResponder.insertNewline(_:)) {
-            let input = inputTextField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            onInputSubmit?(input)
+            submitCurrentInput()
             return true
         } else if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
+            combobox?.hide()
             onInputCancel?()
+            return true
+        } else if commandSelector == #selector(NSResponder.moveDown(_:)) {
+            combobox?.moveSelection(by: 1)
+            return true
+        } else if commandSelector == #selector(NSResponder.moveUp(_:)) {
+            combobox?.moveSelection(by: -1)
+            return true
+        } else if commandSelector == #selector(NSResponder.insertTab(_:)) {
+            if let selected = combobox?.selectedItem {
+                inputTextField.stringValue = selected.display
+            }
             return true
         }
         return false

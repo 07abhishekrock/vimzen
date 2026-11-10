@@ -13,6 +13,7 @@ public final class KeyEngine: ObservableObject {
     private weak var tabManager: TabManager?
     public var onTriggerInputPlugin: ((String) -> Void)?
     public var onCancelInputPlugin: (() -> Void)?
+    public var onComboboxMove: ((Int) -> Void)?
 
     public init(tabManager: TabManager) {
         self.tabManager = tabManager
@@ -41,7 +42,18 @@ public final class KeyEngine: ObservableObject {
                 onCancelInputPlugin?()
                 return true
             }
-            // Pass all keystrokes through to the active input plugin's text field
+
+            // Route Ctrl-j / Ctrl-k to combobox row selection
+            if isCtrl && event.charactersIgnoringModifiers == "j" {
+                onComboboxMove?(1)
+                return true
+            }
+            if isCtrl && event.charactersIgnoringModifiers == "k" {
+                onComboboxMove?(-1)
+                return true
+            }
+
+            // Pass all other keystrokes through to the active input plugin's text field
             return false
         }
 

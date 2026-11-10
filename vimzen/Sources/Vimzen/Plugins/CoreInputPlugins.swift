@@ -9,11 +9,36 @@ public final class OpenUrlInputPlugin: InputPlugin {
     public let promptIconName: String? = "globe"
     public let commandAliases = [":open", ":o"]
     public let placeholder = "Enter URL or search query (e.g. groww.in, github.com)..."
+    public let isComboboxEnabled: Bool = true
 
     private let inNewTab: Bool
+    private weak var tabManager: TabManager?
+    private lazy var tabsSource: TabsPickerSource? = {
+        guard let tm = tabManager else { return nil }
+        return TabsPickerSource(tabManager: tm)
+    }()
+    private let googleSource = GoogleSuggestSource()
 
-    public init(inNewTab: Bool = false) {
+    public init(tabManager: TabManager? = nil, inNewTab: Bool = false) {
+        self.tabManager = tabManager
         self.inNewTab = inNewTab
+    }
+
+    public func queryItems(query: String) async -> [RankedResult] {
+        var candidates: [PickerItem] = []
+
+        if let tabsSource = tabsSource {
+            if let tabItems = try? await tabsSource.items(matching: query) {
+                candidates.append(contentsOf: tabItems)
+            }
+        }
+
+        if let googleItems = try? await googleSource.items(matching: query) {
+            candidates.append(contentsOf: googleItems)
+        }
+
+        let hasActiveTab = tabManager?.activeTab != nil
+        return PickerRanking.rank(query: query, candidates: candidates, hasActiveTab: hasActiveTab)
     }
 
     public func onSubmit(input: String, controller: AnyObject?) {
@@ -91,7 +116,7 @@ public final class CommandInputPlugin: InputPlugin {
             mainVC.tabManager.activeTab?.reload()
         case _ where cmd.starts(with: ":open ") || cmd.starts(with: "open "):
             let urlPart = cmd.replacingOccurrences(of: "^:?open\\s+", with: "", options: .regularExpression)
-            OpenUrlInputPlugin(inNewTab: false).onSubmit(input: urlPart, controller: controller)
+            OpenUrlInputPlugin(tabManager: mainVC.tabManager, inNewTab: false).onSubmit(input: urlPart, controller: controller)
         default:
             break
         }
