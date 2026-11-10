@@ -8,9 +8,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     public func applicationDidFinishLaunching(_ notification: Notification) {
         setupApplicationMenu()
 
+        let screen = NSScreen.main
+        let initialFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+
         let window = KeyInterceptingWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1100, height: 780),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            contentRect: initialFrame,
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView, .fullScreen],
             backing: .buffered,
             defer: false
         )
@@ -18,7 +21,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         window.title = "Vimzen"
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
-        window.center()
+        window.setFrame(initialFrame, display: true)
+        window.setFrameAutosaveName("VimzenMainWindow")
         window.isReleasedWhenClosed = false
         window.backgroundColor = NSColor(calibratedWhite: 0.08, alpha: 1.0)
 
@@ -72,6 +76,15 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
         editMenuItem.submenu = editMenu
         mainMenu.addItem(editMenuItem)
+
+        // View Menu
+        let viewMenuItem = NSMenuItem()
+        let viewMenu = NSMenu(title: "View")
+        let fullScreenItem = NSMenuItem(title: "Toggle Full Screen", action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")
+        fullScreenItem.keyEquivalentModifierMask = [.command, .control]
+        viewMenu.addItem(fullScreenItem)
+        viewMenuItem.submenu = viewMenu
+        mainMenu.addItem(viewMenuItem)
 
         NSApp.mainMenu = mainMenu
     }

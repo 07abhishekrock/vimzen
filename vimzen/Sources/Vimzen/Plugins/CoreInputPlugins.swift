@@ -178,6 +178,8 @@ public final class CommandInputPlugin: InputPlugin {
             }
         case ":qa", ":qall", "qa":
             NSApp.terminate(nil)
+        case ":fullscreen", "fullscreen", ":fs", "fs":
+            mainVC.view.window?.toggleFullScreen(nil)
         case ":r", ":reload", "r":
             mainVC.tabManager.activeTab?.reload()
         case ":tabnew", "tabnew", ":t", "t":
