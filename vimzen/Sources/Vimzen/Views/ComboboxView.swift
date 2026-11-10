@@ -165,18 +165,18 @@ public final class ComboboxView: NSView {
     }
 
     public func updateItems(_ newItems: [RankedResult]) {
-        self.items = newItems
+        self.items = Array(newItems.prefix(8))
         selectedIndex = 0
 
         stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
         rowViews.removeAll()
 
-        guard !newItems.isEmpty else {
+        guard !items.isEmpty else {
             hide()
             return
         }
 
-        for (index, item) in newItems.prefix(8).enumerated() {
+        for (index, item) in items.enumerated() {
             let rowView = ComboboxRowView(item: item)
             rowView.isSelected = (index == selectedIndex)
             rowView.translatesAutoresizingMaskIntoConstraints = false
@@ -195,6 +195,45 @@ public final class ComboboxView: NSView {
 
         updateSelectionUI()
         isHidden = false
+    }
+
+    public func appendItems(_ newItems: [RankedResult]) {
+        guard items.count < 8 else { return }
+
+        let existingIds = Set(items.map(\.id))
+        let fresh = newItems.filter { !existingIds.contains($0.id) }
+        guard !fresh.isEmpty else { return }
+
+        let allowedCount = 8 - items.count
+        let toAdd = Array(fresh.prefix(allowedCount))
+        let previouslySelectedId = selectedItem?.id
+
+        for item in toAdd {
+            let index = items.count
+            items.append(item)
+
+            let rowView = ComboboxRowView(item: item)
+            rowView.isSelected = false
+            rowView.translatesAutoresizingMaskIntoConstraints = false
+
+            rowView.onSelect = { [weak self] in
+                self?.selectedIndex = index
+                self?.updateSelectionUI()
+                self?.onCommitSelection?(item)
+            }
+
+            stackView.addArrangedSubview(rowView)
+            rowView.leadingAnchor.constraint(equalTo: stackView.leadingAnchor).isActive = true
+            rowView.trailingAnchor.constraint(equalTo: stackView.trailingAnchor).isActive = true
+            rowViews.append(rowView)
+        }
+
+        if let prevId = previouslySelectedId,
+           let newIndex = items.firstIndex(where: { $0.id == prevId }) {
+            selectedIndex = newIndex
+        }
+        updateSelectionUI()
+        isHidden = items.isEmpty
     }
 
     public func moveSelection(by delta: Int) {

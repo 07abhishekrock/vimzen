@@ -57,6 +57,10 @@ public protocol InputPlugin: AnyObject {
     var placeholder: String { get }
     var isComboboxEnabled: Bool { get }
     func queryItems(query: String) async -> [RankedResult]
+    func queryItemsStreaming(
+        query: String,
+        onUpdate: @escaping @MainActor ([RankedResult]) -> Void
+    ) async
     func onSubmit(input: String, controller: AnyObject?)
     func onCancel(controller: AnyObject?)
 }
@@ -65,6 +69,13 @@ extension InputPlugin {
     public var promptIconName: String? { nil }
     public var isComboboxEnabled: Bool { false }
     public func queryItems(query: String) async -> [RankedResult] { [] }
+    public func queryItemsStreaming(
+        query: String,
+        onUpdate: @escaping @MainActor ([RankedResult]) -> Void
+    ) async {
+        let results = await queryItems(query: query)
+        onUpdate(results)
+    }
 }
 
 /// Transient status bar toast notification with optional interactive shortcut key.

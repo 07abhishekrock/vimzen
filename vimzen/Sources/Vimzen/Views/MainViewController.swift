@@ -169,6 +169,13 @@ public final class OpenNewTabInputPlugin: InputPlugin {
         await inner.queryItems(query: query)
     }
 
+    public func queryItemsStreaming(
+        query: String,
+        onUpdate: @escaping @MainActor ([RankedResult]) -> Void
+    ) async {
+        await inner.queryItemsStreaming(query: query, onUpdate: onUpdate)
+    }
+
     public func onSubmit(input: String, controller: AnyObject?) {
         inner.onSubmit(input: input, controller: controller)
     }

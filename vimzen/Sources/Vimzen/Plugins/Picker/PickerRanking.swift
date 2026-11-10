@@ -88,8 +88,15 @@ public struct PickerRanking {
             return ScoredItem(item: item, score: finalScore)
         }
 
-        // 2. Sort by descending score
-        let sorted = scored.sorted { $0.score > $1.score }
+        // 2. Sort by descending score (tie-breaking by recency)
+        let sorted = scored.sorted {
+            if abs($0.score - $1.score) > 0.0001 {
+                return $0.score > $1.score
+            }
+            let d0 = $0.item.lastVisitAt ?? .distantPast
+            let d1 = $1.item.lastVisitAt ?? .distantPast
+            return d0 > d1
+        }
 
         // 3. Deduplicate by domain (highest-scoring candidate per domain wins)
         let deduped = deduplicateByDomain(sorted)
@@ -206,6 +213,10 @@ public struct PickerRanking {
                 return true // Keep non-URL items (e.g. raw suggestions or commands)
             }
             let normalizedHost = host.replacingOccurrences(of: "^www\\.", with: "", options: .regularExpression)
+            if scored.item.source == .openTab {
+                seenDomains.insert(normalizedHost)
+                return true
+            }
             return seenDomains.insert(normalizedHost).inserted
         }
     }

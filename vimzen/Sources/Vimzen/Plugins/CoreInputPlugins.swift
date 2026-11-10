@@ -1,5 +1,10 @@
 import AppKit
 
+public enum VimzenDefaults {
+    /// Maximum number of MRU tabs to display in the combobox for an empty query.
+    public static let emptyComboboxTabLimit = 5
+}
+
 // MARK: - Open URL Input Plugin
 
 @MainActor
@@ -33,12 +38,45 @@ public final class OpenUrlInputPlugin: InputPlugin {
             }
         }
 
-        if let googleItems = try? await googleSource.items(matching: query) {
-            candidates.append(contentsOf: googleItems)
+        if !query.isEmpty {
+            if let googleItems = try? await googleSource.items(matching: query) {
+                candidates.append(contentsOf: googleItems)
+            }
         }
 
         let hasActiveTab = tabManager?.activeTab != nil
-        return PickerRanking.rank(query: query, candidates: candidates, hasActiveTab: hasActiveTab)
+        let ranked = PickerRanking.rank(query: query, candidates: candidates, hasActiveTab: hasActiveTab)
+        if query.isEmpty {
+            return Array(ranked.prefix(VimzenDefaults.emptyComboboxTabLimit))
+        }
+        return ranked
+    }
+
+    public func queryItemsStreaming(
+        query: String,
+        onUpdate: @escaping @MainActor ([RankedResult]) -> Void
+    ) async {
+        var tabCandidates: [PickerItem] = []
+        if let tabsSource = tabsSource {
+            tabCandidates = (try? await tabsSource.items(matching: query)) ?? []
+        }
+        if Task.isCancelled { return }
+
+        let hasActiveTab = tabManager?.activeTab != nil
+        let tabsRanked = PickerRanking.rank(query: query, candidates: tabCandidates, hasActiveTab: hasActiveTab)
+        let cappedTabs = query.isEmpty
+            ? Array(tabsRanked.prefix(VimzenDefaults.emptyComboboxTabLimit))
+            : tabsRanked
+
+        onUpdate(cappedTabs)
+
+        if query.isEmpty { return }
+
+        let googleCandidates = (try? await googleSource.items(matching: query)) ?? []
+        if Task.isCancelled { return }
+
+        let googleRanked = PickerRanking.rank(query: query, candidates: googleCandidates, hasActiveTab: hasActiveTab)
+        onUpdate(cappedTabs + googleRanked)
     }
 
     public func onSubmit(input: String, controller: AnyObject?) {
@@ -166,9 +204,13 @@ public final class TabPickerInputPlugin: InputPlugin {
 
     public func queryItems(query: String) async -> [RankedResult] {
         guard let tabsSource = tabsSource else { return [] }
-        let candidates = (try? await tabsSource.items(matching: query)) ?? []
+        let raw = (try? await tabsSource.items(matching: query)) ?? []
         let hasActiveTab = tabManager?.activeTab != nil
-        return PickerRanking.rank(query: query, candidates: candidates, hasActiveTab: hasActiveTab)
+        let ranked = PickerRanking.rank(query: query, candidates: raw, hasActiveTab: hasActiveTab)
+        if query.isEmpty {
+            return Array(ranked.prefix(VimzenDefaults.emptyComboboxTabLimit))
+        }
+        return ranked
     }
 
     public func onSubmit(input: String, controller: AnyObject?) {

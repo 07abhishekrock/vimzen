@@ -349,9 +349,16 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
                 return
             }
 
-            let results = await plugin.queryItems(query: query)
-            guard !Task.isCancelled else { return }
-            self.combobox?.updateItems(results)
+            var firstUpdate = true
+            await plugin.queryItemsStreaming(query: query) { [weak self] results in
+                guard let self = self, !Task.isCancelled else { return }
+                if firstUpdate {
+                    self.combobox?.updateItems(results)
+                    firstUpdate = false
+                } else {
+                    self.combobox?.appendItems(results)
+                }
+            }
         }
     }
 

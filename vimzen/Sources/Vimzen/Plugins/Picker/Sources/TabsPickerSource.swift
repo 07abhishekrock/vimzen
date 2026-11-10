@@ -14,7 +14,12 @@ public final class TabsPickerSource: PickerSource {
     public func items(matching query: String) async throws -> [PickerItem] {
         guard let tabManager = tabManager else { return [] }
 
-        return tabManager.tabs.map { tab in
+        // Most recently active tabs first
+        let sortedTabs = tabManager.tabs.sorted {
+            $0.lastActiveAt > $1.lastActiveAt
+        }
+
+        return sortedTabs.map { tab in
             let displayTitle = tab.title.isEmpty ? (tab.url?.host ?? "New Tab") : tab.title
             let detail = tab.url?.absoluteString
 
