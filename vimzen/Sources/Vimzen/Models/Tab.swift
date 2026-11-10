@@ -18,6 +18,7 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
     @Published public var canGoForward: Bool = false
     @Published public var isJavaScriptEnabled: Bool = true
     public private(set) var currentServerTrust: SecTrust?
+    public private(set) var isNewTabScratchpad: Bool = false
     public private(set) var lastActiveAt: Date = Date()
 
     public func markActive() {
@@ -198,8 +199,28 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
     }
 
     public func load(url: URL) {
+        isNewTabScratchpad = false
         let request = URLRequest(url: url)
         webView.load(request)
+    }
+
+    public func loadNewTabTemplate() {
+        isNewTabScratchpad = true
+        title = "New Tab"
+        url = nil
+        webView.loadHTMLString(NewTabTemplate.html(), baseURL: nil)
+    }
+
+    public func focusEditorIfNewTab() {
+        if isNewTabScratchpad {
+            webView.evaluateJavaScript("document.getElementById('pad')?.focus();", completionHandler: nil)
+        }
+    }
+
+    public func blurEditorIfNewTab() {
+        if isNewTabScratchpad {
+            webView.evaluateJavaScript("document.getElementById('pad')?.blur();", completionHandler: nil)
+        }
     }
 
     public func scrollBy(dx: CGFloat, dy: CGFloat) {

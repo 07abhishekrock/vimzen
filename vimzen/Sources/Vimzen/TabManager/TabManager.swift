@@ -45,6 +45,8 @@ public final class TabManager: ObservableObject {
 
         if let url = url {
             tab.load(url: url)
+        } else {
+            tab.loadNewTabTemplate()
         }
 
         if targetProfile.id == ProfileManager.shared.activeProfileId {

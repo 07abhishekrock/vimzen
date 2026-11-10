@@ -23,6 +23,11 @@ public final class KeyEngine: ObservableObject {
     public func setMode(_ newMode: Mode) {
         mode = newMode
         clearBuffer()
+        if newMode == .insert {
+            tabManager?.activeTab?.focusEditorIfNewTab()
+        } else if newMode == .normal {
+            tabManager?.activeTab?.blurEditorIfNewTab()
+        }
     }
 
     public func clearBuffer() {

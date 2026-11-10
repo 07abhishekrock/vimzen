@@ -20,6 +20,11 @@ public final class MainViewController: NSViewController {
         registerCorePlugins()
         setupHierarchy()
         setupBindings()
+
+        // Create initial default new tab scratchpad if no tabs exist
+        if tabManager.tabs.isEmpty {
+            tabManager.createTab(url: nil, activate: true)
+        }
     }
 
     private func registerCorePlugins() {
