@@ -83,6 +83,12 @@ fi
 # PkgInfo
 echo -n "APPL????" > "${APP_BUNDLE}/Contents/PkgInfo"
 
+# Copy AppIcon.icns if present
+if [ -f "${VIMZEN_DIR}/Resources/AppIcon.icns" ]; then
+    cp "${VIMZEN_DIR}/Resources/AppIcon.icns" "${APP_BUNDLE}/Contents/Resources/AppIcon.icns"
+    echo "✓ Attached AppIcon.icns"
+fi
+
 # Ad-hoc code sign so macOS allows launching
 echo "==> Ad-hoc code signing application..."
 codesign --force --deep --sign - "${APP_BUNDLE}" 2>/dev/null || true
