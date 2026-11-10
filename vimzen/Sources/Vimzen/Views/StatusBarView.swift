@@ -47,7 +47,7 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
         border.autoresizingMask = [.layerWidthSizable]
         layer?.addSublayer(border)
 
-        // Slot Stacks
+        // Slot Stacks - Zero horizontal padding, filling the 26px height
         leftStack.orientation = .horizontal
         leftStack.spacing = 8
         leftStack.alignment = .centerY
@@ -72,16 +72,28 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
         NSLayoutConstraint.activate([
             heightAnchor.constraint(equalToConstant: 26),
 
-            leftStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
-            leftStack.centerYAnchor.constraint(equalTo: centerYAnchor),
-            leftStack.trailingAnchor.constraint(lessThanOrEqualTo: rightStack.leadingAnchor, constant: -16),
+            // Left slot spans from x = 0 (flush against left window frame)
+            leftStack.leadingAnchor.constraint(equalTo: leadingAnchor),
+            leftStack.topAnchor.constraint(equalTo: topAnchor),
+            leftStack.bottomAnchor.constraint(equalTo: bottomAnchor),
+            leftStack.trailingAnchor.constraint(lessThanOrEqualTo: centerStack.leadingAnchor),
 
+            // Center slot
             centerStack.centerXAnchor.constraint(equalTo: centerXAnchor),
-            centerStack.centerYAnchor.constraint(equalTo: centerYAnchor),
+            centerStack.topAnchor.constraint(equalTo: topAnchor),
+            centerStack.bottomAnchor.constraint(equalTo: bottomAnchor),
+            centerStack.trailingAnchor.constraint(lessThanOrEqualTo: rightStack.leadingAnchor),
 
-            rightStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
-            rightStack.centerYAnchor.constraint(equalTo: centerYAnchor)
+            // Right slot ends at x = width (flush against right window frame)
+            rightStack.trailingAnchor.constraint(equalTo: trailingAnchor),
+            rightStack.topAnchor.constraint(equalTo: topAnchor),
+            rightStack.bottomAnchor.constraint(equalTo: bottomAnchor)
         ])
+
+        // Allow leftStack to expand and take available horizontal space across the bar
+        let expandConstraint = leftStack.trailingAnchor.constraint(equalTo: rightStack.leadingAnchor, constant: -8)
+        expandConstraint.priority = .defaultLow
+        expandConstraint.isActive = true
 
         setupSlotSubscriptions()
     }
@@ -93,7 +105,7 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
         toastView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(toastView)
 
-        toastMessageLabel.font = NSFont.systemFont(ofSize: 11, weight: .medium)
+        toastMessageLabel.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .medium)
         toastMessageLabel.textColor = NSColor(calibratedRed: 0.95, green: 0.77, blue: 0.06, alpha: 1.0)
         toastMessageLabel.translatesAutoresizingMaskIntoConstraints = false
 
@@ -120,7 +132,7 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
             toastView.topAnchor.constraint(equalTo: topAnchor),
             toastView.bottomAnchor.constraint(equalTo: bottomAnchor),
 
-            toastStack.leadingAnchor.constraint(equalTo: toastView.leadingAnchor, constant: 12),
+            toastStack.leadingAnchor.constraint(equalTo: toastView.leadingAnchor, constant: 8),
             toastStack.centerYAnchor.constraint(equalTo: toastView.centerYAnchor),
 
             toastActionBadge.heightAnchor.constraint(equalToConstant: 16),
@@ -139,7 +151,7 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
 
         promptContainer.wantsLayer = true
         promptContainer.layer?.backgroundColor = NSColor(calibratedRed: 0.61, green: 0.35, blue: 0.71, alpha: 1.0).cgColor
-        promptContainer.layer?.cornerRadius = 3
+        promptContainer.layer?.cornerRadius = 0
         promptContainer.translatesAutoresizingMaskIntoConstraints = false
 
         promptLabel.font = NSFont.monospacedSystemFont(ofSize: 10, weight: .heavy)
@@ -157,12 +169,12 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
         inputTextField.isEditable = true
         inputTextField.isSelectable = true
         inputTextField.refusesFirstResponder = false
-        inputTextField.font = NSFont.systemFont(ofSize: 11, weight: .regular)
+        inputTextField.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
         inputTextField.textColor = .white
         inputTextField.delegate = self
         inputTextField.translatesAutoresizingMaskIntoConstraints = false
 
-        inputHintLabel.font = NSFont.systemFont(ofSize: 10, weight: .medium)
+        inputHintLabel.font = NSFont.monospacedSystemFont(ofSize: 10, weight: .medium)
         inputHintLabel.textColor = NSColor(calibratedWhite: 0.45, alpha: 1.0)
         inputHintLabel.translatesAutoresizingMaskIntoConstraints = false
 
@@ -177,11 +189,13 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
             inputTakeoverView.topAnchor.constraint(equalTo: topAnchor),
             inputTakeoverView.bottomAnchor.constraint(equalTo: bottomAnchor),
 
-            promptContainer.leadingAnchor.constraint(equalTo: inputTakeoverView.leadingAnchor, constant: 10),
-            promptContainer.centerYAnchor.constraint(equalTo: inputTakeoverView.centerYAnchor),
-            promptContainer.heightAnchor.constraint(equalToConstant: 18),
-            promptLabel.leadingAnchor.constraint(equalTo: promptContainer.leadingAnchor, constant: 6),
-            promptLabel.trailingAnchor.constraint(equalTo: promptContainer.trailingAnchor, constant: -6),
+            // Flush against left edge with full 26px height
+            promptContainer.leadingAnchor.constraint(equalTo: inputTakeoverView.leadingAnchor),
+            promptContainer.topAnchor.constraint(equalTo: inputTakeoverView.topAnchor),
+            promptContainer.bottomAnchor.constraint(equalTo: inputTakeoverView.bottomAnchor),
+
+            promptLabel.leadingAnchor.constraint(equalTo: promptContainer.leadingAnchor, constant: 8),
+            promptLabel.trailingAnchor.constraint(equalTo: promptContainer.trailingAnchor, constant: -8),
             promptLabel.centerYAnchor.constraint(equalTo: promptContainer.centerYAnchor),
 
             promptArrow.leadingAnchor.constraint(equalTo: promptContainer.trailingAnchor, constant: 6),
@@ -191,7 +205,7 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
             inputTextField.centerYAnchor.constraint(equalTo: inputTakeoverView.centerYAnchor),
             inputTextField.trailingAnchor.constraint(equalTo: inputHintLabel.leadingAnchor, constant: -12),
 
-            inputHintLabel.trailingAnchor.constraint(equalTo: inputTakeoverView.trailingAnchor, constant: -10),
+            inputHintLabel.trailingAnchor.constraint(equalTo: inputTakeoverView.trailingAnchor, constant: -8),
             inputHintLabel.centerYAnchor.constraint(equalTo: inputTakeoverView.centerYAnchor)
         ])
     }

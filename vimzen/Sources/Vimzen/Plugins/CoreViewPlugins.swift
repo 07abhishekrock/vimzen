@@ -16,7 +16,7 @@ public final class ModeBadgePlugin: ViewPlugin {
         self.order = order
 
         view.wantsLayer = true
-        view.layer?.cornerRadius = 3
+        view.layer?.cornerRadius = 0
         view.layer?.masksToBounds = true
         view.translatesAutoresizingMaskIntoConstraints = false
 
@@ -26,9 +26,9 @@ public final class ModeBadgePlugin: ViewPlugin {
         view.addSubview(label)
 
         NSLayoutConstraint.activate([
-            view.heightAnchor.constraint(equalToConstant: 18),
-            label.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 6),
-            label.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -6),
+            view.heightAnchor.constraint(equalToConstant: 26),
+            label.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 8),
+            label.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -8),
             label.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])
     }
@@ -101,16 +101,22 @@ public final class PageIdentityPlugin: ViewPlugin {
         self.order = order
 
         view.translatesAutoresizingMaskIntoConstraints = false
+        view.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
-        titleLabel.font = NSFont.systemFont(ofSize: 11, weight: .semibold)
+        titleLabel.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .semibold)
         titleLabel.textColor = NSColor(calibratedWhite: 0.90, alpha: 1.0)
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        titleLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
-        urlLabel.font = NSFont.systemFont(ofSize: 11, weight: .regular)
+        urlLabel.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
         urlLabel.textColor = NSColor(calibratedWhite: 0.50, alpha: 1.0)
         urlLabel.lineBreakMode = .byClipping
         urlLabel.translatesAutoresizingMaskIntoConstraints = false
+        urlLabel.setContentHuggingPriority(.required, for: .horizontal)
+        urlLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
 
         let stack = NSStackView(views: [titleLabel, urlLabel])
         stack.orientation = .horizontal
@@ -188,7 +194,7 @@ public final class LoadingStatusPlugin: ViewPlugin {
         spinner.isDisplayedWhenStopped = false
         spinner.translatesAutoresizingMaskIntoConstraints = false
 
-        statusLabel.font = NSFont.systemFont(ofSize: 11, weight: .regular)
+        statusLabel.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
         statusLabel.textColor = NSColor(calibratedWhite: 0.60, alpha: 1.0)
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
 
@@ -240,14 +246,14 @@ public final class TabsCountPlugin: ViewPlugin {
         self.order = order
 
         view.translatesAutoresizingMaskIntoConstraints = false
-        label.font = NSFont.systemFont(ofSize: 10, weight: .medium)
+        label.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .medium)
         label.textColor = NSColor(calibratedWhite: 0.50, alpha: 1.0)
         label.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(label)
 
         NSLayoutConstraint.activate([
-            label.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            label.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            label.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 4),
+            label.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -8),
             label.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])
     }

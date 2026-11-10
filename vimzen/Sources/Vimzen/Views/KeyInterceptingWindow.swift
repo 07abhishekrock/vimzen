@@ -9,6 +9,15 @@ public final class KeyInterceptingWindow: NSWindow {
                 // Key was intercepted and handled by Vimzen modal engine — swallow it!
                 return
             }
+        } else if event.type == .leftMouseDown {
+            if let engine = keyEngine, engine.mode == .normal {
+                let location = event.locationInWindow
+                let windowHeight = contentView?.bounds.height ?? frame.height
+                // Clicking anywhere in the webview frame window toggles from NORMAL to INSERT mode
+                if location.y >= 26 && location.y <= (windowHeight - 28) {
+                    engine.setMode(.insert)
+                }
+            }
         }
         super.sendEvent(event)
     }
