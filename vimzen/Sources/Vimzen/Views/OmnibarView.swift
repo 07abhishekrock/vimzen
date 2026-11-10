@@ -1,8 +1,11 @@
 import AppKit
 
 public final class OmnibarView: NSView, NSTextFieldDelegate {
+    private let promptContainer = NSView()
+    private let promptLabel = NSTextField(labelWithString: "OPEN")
+    private let promptArrow = NSTextField(labelWithString: "❯")
     private let textField = NSTextField()
-    private let promptIcon = NSTextField(labelWithString: "❯")
+    private let hintLabel = NSTextField(labelWithString: "esc: cancel   ↵: open")
 
     public var onSubmit: ((String) -> Void)?
     public var onCancel: (() -> Void)?
@@ -19,42 +22,79 @@ public final class OmnibarView: NSView, NSTextFieldDelegate {
 
     private func setupView() {
         wantsLayer = true
-        layer?.backgroundColor = NSColor(calibratedWhite: 0.14, alpha: 0.98).cgColor
-        layer?.cornerRadius = 8
-        layer?.borderWidth = 1.0
-        layer?.borderColor = NSColor(calibratedRed: 0.20, green: 0.60, blue: 1.00, alpha: 0.6).cgColor
-        layer?.shadowColor = NSColor.black.cgColor
-        layer?.shadowOpacity = 0.5
-        layer?.shadowRadius = 12
-        layer?.shadowOffset = CGSize(width: 0, height: -4)
+        layer?.backgroundColor = NSColor(calibratedWhite: 0.12, alpha: 1.0).cgColor
 
-        promptIcon.font = NSFont.monospacedSystemFont(ofSize: 14, weight: .bold)
-        promptIcon.textColor = NSColor(calibratedRed: 0.20, green: 0.60, blue: 1.00, alpha: 1.0)
-        promptIcon.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(promptIcon)
+        // Top border line matching the status line
+        let border = CALayer()
+        border.backgroundColor = NSColor(calibratedWhite: 0.22, alpha: 1.0).cgColor
+        border.frame = CGRect(x: 0, y: bounds.height - 1, width: 2000, height: 1)
+        border.autoresizingMask = [.layerWidthSizable]
+        layer?.addSublayer(border)
 
+        // Mode badge container for "OPEN"
+        promptContainer.wantsLayer = true
+        promptContainer.layer?.backgroundColor = NSColor(calibratedRed: 0.61, green: 0.35, blue: 0.71, alpha: 1.0).cgColor
+        promptContainer.layer?.cornerRadius = 3
+        promptContainer.layer?.masksToBounds = true
+        promptContainer.translatesAutoresizingMaskIntoConstraints = false
+
+        promptLabel.font = NSFont.monospacedSystemFont(ofSize: 10, weight: .heavy)
+        promptLabel.textColor = .white
+        promptLabel.alignment = .center
+        promptLabel.translatesAutoresizingMaskIntoConstraints = false
+        promptContainer.addSubview(promptLabel)
+
+        // Arrow icon
+        promptArrow.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .bold)
+        promptArrow.textColor = NSColor(calibratedRed: 0.20, green: 0.60, blue: 1.00, alpha: 1.0)
+        promptArrow.translatesAutoresizingMaskIntoConstraints = false
+
+        // Main input text field
         textField.isBordered = false
         textField.drawsBackground = false
         textField.focusRingType = .none
         textField.isEditable = true
         textField.isSelectable = true
         textField.refusesFirstResponder = false
-        textField.font = NSFont.systemFont(ofSize: 14, weight: .regular)
-        textField.textColor = NSColor.white
-        textField.placeholderString = "Search or enter address (e.g. groww.in, github.com)..."
+        textField.font = NSFont.systemFont(ofSize: 11, weight: .regular)
+        textField.textColor = .white
+        textField.placeholderString = "Enter URL or search query (e.g. groww.in, github.com)..."
         textField.delegate = self
         textField.translatesAutoresizingMaskIntoConstraints = false
+
+        // Hint label on right
+        hintLabel.font = NSFont.systemFont(ofSize: 10, weight: .medium)
+        hintLabel.textColor = NSColor(calibratedWhite: 0.45, alpha: 1.0)
+        hintLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        addSubview(promptContainer)
+        addSubview(promptArrow)
         addSubview(textField)
+        addSubview(hintLabel)
 
         NSLayoutConstraint.activate([
-            heightAnchor.constraint(equalToConstant: 44),
+            heightAnchor.constraint(equalToConstant: 26),
 
-            promptIcon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
-            promptIcon.centerYAnchor.constraint(equalTo: centerYAnchor),
+            // Badge constraints
+            promptContainer.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
+            promptContainer.centerYAnchor.constraint(equalTo: centerYAnchor),
+            promptContainer.heightAnchor.constraint(equalToConstant: 18),
+            promptLabel.leadingAnchor.constraint(equalTo: promptContainer.leadingAnchor, constant: 6),
+            promptLabel.trailingAnchor.constraint(equalTo: promptContainer.trailingAnchor, constant: -6),
+            promptLabel.centerYAnchor.constraint(equalTo: promptContainer.centerYAnchor),
 
-            textField.leadingAnchor.constraint(equalTo: promptIcon.trailingAnchor, constant: 10),
-            textField.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
-            textField.centerYAnchor.constraint(equalTo: centerYAnchor)
+            // Arrow
+            promptArrow.leadingAnchor.constraint(equalTo: promptContainer.trailingAnchor, constant: 6),
+            promptArrow.centerYAnchor.constraint(equalTo: centerYAnchor),
+
+            // Text input
+            textField.leadingAnchor.constraint(equalTo: promptArrow.trailingAnchor, constant: 6),
+            textField.centerYAnchor.constraint(equalTo: centerYAnchor),
+            textField.trailingAnchor.constraint(equalTo: hintLabel.leadingAnchor, constant: -12),
+
+            // Hint
+            hintLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
+            hintLabel.centerYAnchor.constraint(equalTo: centerYAnchor)
         ])
     }
 

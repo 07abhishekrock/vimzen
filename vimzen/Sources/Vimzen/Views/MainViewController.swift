@@ -5,6 +5,7 @@ public final class MainViewController: NSViewController {
     public let tabManager = TabManager()
     public lazy var keyEngine = KeyEngine(tabManager: tabManager)
 
+    private let dragHeader = WindowDragHeaderView()
     private let statusBar = StatusBarView()
     private let omnibar = OmnibarView()
     private var openInNewTab: Bool = false
@@ -22,6 +23,10 @@ public final class MainViewController: NSViewController {
     }
 
     private func setupHierarchy() {
+        // Draggable window header at top
+        dragHeader.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(dragHeader)
+
         // Tab container view
         let container = tabManager.containerView
         container.translatesAutoresizingMaskIntoConstraints = false
@@ -31,28 +36,35 @@ public final class MainViewController: NSViewController {
         statusBar.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(statusBar)
 
-        // Omnibar overlay
+        // Omnibar overlay (docks directly on the bottom bar)
         omnibar.isHidden = true
         omnibar.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(omnibar)
 
         NSLayoutConstraint.activate([
-            // Container takes top down to status bar
-            container.topAnchor.constraint(equalTo: view.topAnchor),
+            // Draggable top header (28px)
+            dragHeader.topAnchor.constraint(equalTo: view.topAnchor),
+            dragHeader.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            dragHeader.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            dragHeader.heightAnchor.constraint(equalToConstant: 28),
+
+            // Webview container takes between drag header and bottom bar
+            container.topAnchor.constraint(equalTo: dragHeader.bottomAnchor),
             container.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             container.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             container.bottomAnchor.constraint(equalTo: statusBar.topAnchor),
 
-            // Status bar at bottom
+            // Status bar at bottom (26px)
             statusBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             statusBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             statusBar.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             statusBar.heightAnchor.constraint(equalToConstant: 26),
 
-            // Omnibar floating top
-            omnibar.topAnchor.constraint(equalTo: view.topAnchor, constant: 40),
-            omnibar.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            omnibar.widthAnchor.constraint(equalToConstant: 620)
+            // Omnibar mounts directly on the bottom bar itself
+            omnibar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            omnibar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            omnibar.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            omnibar.heightAnchor.constraint(equalToConstant: 26)
         ])
     }
 

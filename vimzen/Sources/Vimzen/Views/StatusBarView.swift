@@ -3,6 +3,7 @@ import Combine
 
 @MainActor
 public final class StatusBarView: NSView {
+    private let modeContainer = NSView()
     private let modeLabel = NSTextField(labelWithString: "NORMAL")
     private let pendingKeysLabel = NSTextField(labelWithString: "")
     private let titleLabel = NSTextField(labelWithString: "Vimzen")
@@ -35,13 +36,16 @@ public final class StatusBarView: NSView {
         border.autoresizingMask = [.layerWidthSizable]
         layer?.addSublayer(border)
 
-        // Mode Badge
-        modeLabel.font = NSFont.monospacedSystemFont(ofSize: 10, weight: .bold)
+        // Mode Badge Container with proper padding
+        modeContainer.wantsLayer = true
+        modeContainer.layer?.cornerRadius = 3
+        modeContainer.layer?.masksToBounds = true
+        modeContainer.translatesAutoresizingMaskIntoConstraints = false
+
+        modeLabel.font = NSFont.monospacedSystemFont(ofSize: 10, weight: .heavy)
         modeLabel.alignment = .center
-        modeLabel.wantsLayer = true
-        modeLabel.layer?.cornerRadius = 3
-        modeLabel.layer?.masksToBounds = true
         modeLabel.translatesAutoresizingMaskIntoConstraints = false
+        modeContainer.addSubview(modeLabel)
 
         // Pending Keys (showcmd)
         pendingKeysLabel.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .medium)
@@ -54,10 +58,10 @@ public final class StatusBarView: NSView {
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        // URL Label
+        // URL Label (max 20 characters)
         urlLabel.font = NSFont.systemFont(ofSize: 11, weight: .regular)
-        urlLabel.textColor = NSColor(calibratedWhite: 0.55, alpha: 1.0)
-        urlLabel.lineBreakMode = .byTruncatingTail
+        urlLabel.textColor = NSColor(calibratedWhite: 0.50, alpha: 1.0)
+        urlLabel.lineBreakMode = .byClipping
         urlLabel.translatesAutoresizingMaskIntoConstraints = false
 
         // Status Indicator
@@ -77,7 +81,7 @@ public final class StatusBarView: NSView {
         tabsCountLabel.translatesAutoresizingMaskIntoConstraints = false
 
         // Assemble Left Stack
-        let leftStack = NSStackView(views: [modeLabel, pendingKeysLabel, titleLabel, urlLabel])
+        let leftStack = NSStackView(views: [modeContainer, pendingKeysLabel, titleLabel, urlLabel])
         leftStack.orientation = .horizontal
         leftStack.spacing = 8
         leftStack.alignment = .centerY
@@ -95,15 +99,18 @@ public final class StatusBarView: NSView {
         NSLayoutConstraint.activate([
             heightAnchor.constraint(equalToConstant: 26),
 
+            // Mode badge internal padding (6px horizontal, 18px height)
+            modeContainer.heightAnchor.constraint(equalToConstant: 18),
+            modeLabel.leadingAnchor.constraint(equalTo: modeContainer.leadingAnchor, constant: 6),
+            modeLabel.trailingAnchor.constraint(equalTo: modeContainer.trailingAnchor, constant: -6),
+            modeLabel.centerYAnchor.constraint(equalTo: modeContainer.centerYAnchor),
+
             leftStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
             leftStack.centerYAnchor.constraint(equalTo: centerYAnchor),
             leftStack.trailingAnchor.constraint(lessThanOrEqualTo: rightStack.leadingAnchor, constant: -16),
 
             rightStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
-            rightStack.centerYAnchor.constraint(equalTo: centerYAnchor),
-
-            modeLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 58),
-            modeLabel.heightAnchor.constraint(equalToConstant: 16)
+            rightStack.centerYAnchor.constraint(equalTo: centerYAnchor)
         ])
 
         updateModeBadge(mode: .normal)
@@ -146,7 +153,7 @@ public final class StatusBarView: NSView {
 
         guard let tab = tab else {
             titleLabel.stringValue = "Vimzen"
-            urlLabel.stringValue = "Zen workspace — press 'o' to open URL"
+            urlLabel.stringValue = ""
             statusIndicator.stringValue = "Idle"
             progressIndicator.stopAnimation(nil)
             return
@@ -159,7 +166,7 @@ public final class StatusBarView: NSView {
                 guard let self = self else { return }
                 let displayTitle = title.isEmpty ? (url?.host ?? "Loading...") : title
                 self.titleLabel.stringValue = displayTitle
-                self.urlLabel.stringValue = url?.absoluteString ?? ""
+                self.urlLabel.stringValue = self.formatURL(url)
             }
             .store(in: &activeTabCancellables)
 
@@ -180,9 +187,33 @@ public final class StatusBarView: NSView {
             .store(in: &activeTabCancellables)
     }
 
+    /// Formats the URL so it never exceeds 20 characters, using "..." when truncated.
+    private func formatURL(_ url: URL?) -> String {
+        guard let url = url else { return "" }
+        var str = url.absoluteString
+
+        // Strip protocol prefix for clean display
+        if str.hasPrefix("https://") {
+            str = String(str.dropFirst(8))
+        } else if str.hasPrefix("http://") {
+            str = String(str.dropFirst(7))
+        }
+
+        // Strip single trailing slash on bare domains (e.g. "groww.in/" -> "groww.in")
+        if str.hasSuffix("/") && str.filter({ $0 == "/" }).count == 1 {
+            str = String(str.dropLast())
+        }
+
+        // Never exceed 20 characters
+        if str.count > 20 {
+            return String(str.prefix(17)) + "..."
+        }
+        return str
+    }
+
     private func updateModeBadge(mode: Mode) {
-        modeLabel.stringValue = " \(mode.badgeText) "
+        modeLabel.stringValue = mode.badgeText
         modeLabel.textColor = mode.badgeTextColor
-        modeLabel.layer?.backgroundColor = mode.badgeBackgroundColor.cgColor
+        modeContainer.layer?.backgroundColor = mode.badgeBackgroundColor.cgColor
     }
 }
