@@ -39,6 +39,7 @@ public final class MainViewController: NSViewController {
         registry.registerInputPlugin(TabPickerInputPlugin(tabManager: tabManager))
         registry.registerInputPlugin(ProfilePickerInputPlugin(tabManager: tabManager))
         registry.registerInputPlugin(MoveTabProfileInputPlugin(tabManager: tabManager))
+        registry.registerInputPlugin(HistoryPickerInputPlugin())
         registry.registerInputPlugin(CommandInputPlugin())
     }
 

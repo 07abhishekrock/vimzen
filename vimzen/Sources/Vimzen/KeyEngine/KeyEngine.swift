@@ -254,6 +254,10 @@ public final class KeyEngine: ObservableObject {
             return true
 
         // Input Plugins (Takeover Bottom Bar)
+        case "gh", ",h":
+            clearBuffer()
+            onTriggerInputPlugin?("input.history-picker")
+            return true
         case "gp":
             clearBuffer()
             onTriggerInputPlugin?("input.profile-picker")
@@ -280,7 +284,7 @@ public final class KeyEngine: ObservableObject {
             return true
 
         default:
-            let validPrefixes = ["g", ":"]
+            let validPrefixes = ["g", ":", ","]
             if !validPrefixes.contains(sequence) {
                 clearBuffer()
             }

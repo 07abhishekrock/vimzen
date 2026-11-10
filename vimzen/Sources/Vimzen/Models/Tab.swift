@@ -55,6 +55,16 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
                 guard let self = self else { return }
                 if !newTitle.isEmpty {
                     self.title = newTitle
+                    if let currentURL = self.webView.url {
+                        let currentProfile = ProfileManager.shared.profiles.first(where: { $0.id == self.profileId })
+                        if !(currentProfile?.isEphemeral ?? false) {
+                            HistoryStore.shared.updateTitle(
+                                url: currentURL,
+                                title: newTitle,
+                                profileId: self.profileId
+                            )
+                        }
+                    }
                 } else if let host = self.webView.url?.host {
                     self.title = host
                 }
@@ -128,6 +138,18 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
             self.title = newTitle
         }
         self.url = webView.url
+
+        if let currentURL = webView.url {
+            let currentProfile = ProfileManager.shared.profiles.first(where: { $0.id == profileId })
+            if !(currentProfile?.isEphemeral ?? false) {
+                HistoryStore.shared.recordVisit(
+                    url: currentURL,
+                    title: self.title,
+                    profileId: profileId,
+                    isTyped: false
+                )
+            }
+        }
     }
 
     public func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {

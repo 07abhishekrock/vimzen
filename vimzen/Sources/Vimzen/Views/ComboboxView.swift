@@ -47,6 +47,8 @@ public final class ComboboxRowView: NSView {
             badgeContainer.layer?.backgroundColor = NSColor(calibratedRed: 0.69, green: 0.32, blue: 0.87, alpha: 0.85).cgColor
         } else if item.badge == "PROF" {
             badgeContainer.layer?.backgroundColor = NSColor(calibratedRed: 0.30, green: 0.70, blue: 0.50, alpha: 0.85).cgColor
+        } else if item.badge == "HIST" {
+            badgeContainer.layer?.backgroundColor = NSColor(calibratedRed: 0.45, green: 0.45, blue: 0.52, alpha: 0.85).cgColor
         } else {
             badgeContainer.layer?.backgroundColor = NSColor(calibratedWhite: 0.25, alpha: 1.0).cgColor
         }

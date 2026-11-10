@@ -23,6 +23,7 @@ public final class OpenUrlInputPlugin: InputPlugin {
         return TabsPickerSource(tabManager: tm)
     }()
     private let googleSource = GoogleSuggestSource()
+    private let historySource = HistoryPickerSource()
 
     public init(tabManager: TabManager? = nil, inNewTab: Bool = false) {
         self.tabManager = tabManager
@@ -39,6 +40,9 @@ public final class OpenUrlInputPlugin: InputPlugin {
         }
 
         if !query.isEmpty {
+            if let histItems = try? await historySource.items(matching: query) {
+                candidates.append(contentsOf: histItems)
+            }
             if let googleItems = try? await googleSource.items(matching: query) {
                 candidates.append(contentsOf: googleItems)
             }
@@ -72,11 +76,17 @@ public final class OpenUrlInputPlugin: InputPlugin {
 
         if query.isEmpty { return }
 
+        var secondaryCandidates: [PickerItem] = []
+        if let histItems = try? await historySource.items(matching: query) {
+            secondaryCandidates.append(contentsOf: histItems)
+        }
         let googleCandidates = (try? await googleSource.items(matching: query)) ?? []
+        secondaryCandidates.append(contentsOf: googleCandidates)
+
         if Task.isCancelled { return }
 
-        let googleRanked = PickerRanking.rank(query: query, candidates: googleCandidates, hasActiveTab: hasActiveTab)
-        onUpdate(cappedTabs + googleRanked)
+        let secondaryRanked = PickerRanking.rank(query: query, candidates: secondaryCandidates, hasActiveTab: hasActiveTab)
+        onUpdate(cappedTabs + secondaryRanked)
     }
 
     public func onSubmit(input: String, controller: AnyObject?) {
@@ -91,6 +101,18 @@ public final class OpenUrlInputPlugin: InputPlugin {
         }
 
         let targetURL = resolveURL(trimmed)
+
+        // Record typed visit in history (for persistent profiles)
+        let activeProfile = ProfileManager.shared.activeProfile
+        if !activeProfile.isEphemeral {
+            HistoryStore.shared.recordVisit(
+                url: targetURL,
+                title: trimmed,
+                profileId: activeProfile.id,
+                isTyped: true
+            )
+        }
+
         if inNewTab || mainVC.tabManager.activeTab == nil {
             mainVC.tabManager.createTab(url: targetURL, activate: true)
         } else {
@@ -181,6 +203,22 @@ public final class CommandInputPlugin: InputPlugin {
             let name = cmd.replacingOccurrences(of: "^:?(send|transfer)\\s+", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
             if let match = ProfileManager.shared.profile(named: name) {
                 mainVC.tabManager.moveCurrentTab(to: match.id)
+            }
+        case ":history", "history":
+            mainVC.keyEngine.onTriggerInputPlugin?("input.history-picker")
+        case _ where cmd.starts(with: ":clearhistory") || cmd.starts(with: "clearhistory"):
+            let arg = cmd.replacingOccurrences(of: "^:?clearhistory\\s*", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
+            let activeProf = ProfileManager.shared.activeProfile
+            if arg == "today" {
+                HistoryStore.shared.clear(profileId: activeProf.id, scope: .today)
+                PluginRegistry.shared.showToast(NotificationToast(message: "Cleared today's history (\(activeProf.name))", duration: 2.0))
+            } else if arg.starts(with: "--domain ") || arg.starts(with: "domain ") {
+                let dom = arg.replacingOccurrences(of: "^(--domain|domain)\\s+", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
+                HistoryStore.shared.clear(profileId: activeProf.id, scope: .domain(dom))
+                PluginRegistry.shared.showToast(NotificationToast(message: "Cleared history for \(dom)", duration: 2.0))
+            } else {
+                HistoryStore.shared.clear(profileId: activeProf.id, scope: .all)
+                PluginRegistry.shared.showToast(NotificationToast(message: "Cleared all history (\(activeProf.name))", duration: 2.0))
             }
         case _ where cmd.starts(with: ":tabnew ") || cmd.starts(with: "tabnew ") || cmd.starts(with: ":t ") || cmd.starts(with: "t "):
             let urlPart = cmd.replacingOccurrences(of: "^:?(tabnew|t)\\s+", with: "", options: .regularExpression)
@@ -384,6 +422,67 @@ public final class MoveTabProfileInputPlugin: InputPlugin {
         guard let mainVC = controller as? MainViewController else { return }
         if let activeWebView = mainVC.tabManager.activeTab?.webView {
             mainVC.view.window?.makeFirstResponder(activeWebView)
+        }
+    }
+}
+
+// MARK: - History Switcher Input Plugin (gh / ,h / :history)
+
+@MainActor
+public final class HistoryPickerInputPlugin: InputPlugin {
+    public let id = "input.history-picker"
+    public let prompt = "HISTORY"
+    public let promptIconName: String? = "clock.fill"
+    public let commandAliases = [":history", ":h"]
+    public let placeholder = "Search browsing history (<C-j>/<C-k>, ↵ to open)..."
+    public let isComboboxEnabled: Bool = true
+
+    private let source = HistoryPickerSource()
+
+    public init() {}
+
+    public func queryItems(query: String) async -> [RankedResult] {
+        let candidates = (try? await source.items(matching: query)) ?? []
+        return PickerRanking.rank(query: query, candidates: candidates, hasActiveTab: false)
+    }
+
+    public func onSubmit(input: String, controller: AnyObject?) {
+        guard let mainVC = controller as? MainViewController else { return }
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        // Strip prefix if any (hist:profileString:URL)
+        let targetString: String
+        if trimmed.hasPrefix("hist:") {
+            let parts = trimmed.components(separatedBy: ":")
+            targetString = parts.dropFirst(2).joined(separator: ":")
+        } else {
+            targetString = trimmed
+        }
+
+        let targetURL = resolveURL(targetString)
+        if mainVC.tabManager.activeTab == nil {
+            mainVC.tabManager.createTab(url: targetURL, activate: true)
+        } else {
+            mainVC.tabManager.activeTab?.load(url: targetURL)
+        }
+    }
+
+    public func onCancel(controller: AnyObject?) {
+        guard let mainVC = controller as? MainViewController else { return }
+        if let activeWebView = mainVC.tabManager.activeTab?.webView {
+            mainVC.view.window?.makeFirstResponder(activeWebView)
+        }
+    }
+
+    private func resolveURL(_ input: String) -> URL {
+        if input.starts(with: "http://") || input.starts(with: "https://") {
+            return URL(string: input) ?? URL(string: "https://google.com/search?q=\(input)")!
+        } else if input.contains(".") && !input.contains(" ") {
+            return URL(string: "https://\(input)")!
+        } else {
+            let encoded = input.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? input
+            return URL(string: "https://www.google.com/search?q=\(encoded)")!
         }
     }
 }
