@@ -1,6 +1,7 @@
 import AppKit
 import WebKit
 import Combine
+import Security
 
 @MainActor
 public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDelegate {
@@ -15,6 +16,8 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
     @Published public var estimatedProgress: Double = 0.0
     @Published public var canGoBack: Bool = false
     @Published public var canGoForward: Bool = false
+    @Published public var isJavaScriptEnabled: Bool = true
+    public private(set) var currentServerTrust: SecTrust?
     public private(set) var lastActiveAt: Date = Date()
 
     public func markActive() {
@@ -115,6 +118,28 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
     }
 
     // MARK: - WKNavigationDelegate
+
+    public func webView(
+        _ webView: WKWebView,
+        decidePolicyFor navigationAction: WKNavigationAction,
+        preferences: WKWebpagePreferences,
+        decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy, WKWebpagePreferences) -> Void
+    ) {
+        preferences.allowsContentJavaScript = self.isJavaScriptEnabled
+        decisionHandler(.allow, preferences)
+    }
+
+    public func webView(
+        _ webView: WKWebView,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping @MainActor @Sendable (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+           let trust = challenge.protectionSpace.serverTrust {
+            self.currentServerTrust = trust
+        }
+        completionHandler(.performDefaultHandling, nil)
+    }
 
     public func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
         self.isLoading = true
@@ -220,5 +245,44 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
             let targetIndex = min(forwardList.count - 1, count - 1)
             webView.go(to: forwardList[targetIndex])
         }
+    }
+
+    public func toggleJavaScript(enable: Bool? = nil) {
+        if let enable = enable {
+            isJavaScriptEnabled = enable
+        } else {
+            isJavaScriptEnabled.toggle()
+        }
+        webView.reload()
+    }
+
+    public func certificateSummary() -> String {
+        guard let url = webView.url else {
+            return "No page loaded"
+        }
+        guard url.scheme?.lowercased() == "https" else {
+            return "⚠️ Insecure connection (\(url.scheme?.uppercased() ?? "HTTP"))"
+        }
+
+        guard let trust = currentServerTrust ?? webView.serverTrust else {
+            return "🔒 TLS Active (\(url.host ?? "domain"))"
+        }
+
+        var error: CFError?
+        let isTrusted = SecTrustEvaluateWithError(trust, &error)
+
+        var details: [String] = []
+        if isTrusted {
+            details.append("🔒 Trusted TLS")
+        } else {
+            details.append("⚠️ Untrusted Certificate")
+        }
+
+        if let chain = SecTrustCopyCertificateChain(trust) as? [SecCertificate], let cert = chain.first {
+            let summary = SecCertificateCopySubjectSummary(cert) as String? ?? (url.host ?? "Certificate")
+            details.append(summary)
+        }
+
+        return details.joined(separator: " · ")
     }
 }

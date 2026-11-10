@@ -222,6 +222,42 @@ public final class CommandInputPlugin: InputPlugin {
                 HistoryStore.shared.clear(profileId: activeProf.id, scope: .all)
                 PluginRegistry.shared.showToast(NotificationToast(message: "Cleared all history (\(activeProf.name))", duration: 2.0))
             }
+        case _ where cmd.starts(with: ":clearcookie") || cmd.starts(with: "clearcookie"):
+            var arg = cmd.replacingOccurrences(of: "^:?clearcookies?\\s*", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
+            if arg.starts(with: "--domain ") {
+                arg = arg.replacingOccurrences(of: "^--domain\\s+", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            let domainArg = arg.isEmpty ? nil : arg
+            SecurityManager.clearCookies(domain: domainArg, profile: ProfileManager.shared.activeProfile, tabManager: mainVC.tabManager)
+        case _ where cmd.starts(with: ":clearstorage") || cmd.starts(with: "clearstorage") || cmd.starts(with: ":cleartokens") || cmd.starts(with: "cleartokens"):
+            var arg = cmd.replacingOccurrences(of: "^:?(clearstorage|cleartokens)\\s*", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
+            if arg.starts(with: "--domain ") {
+                arg = arg.replacingOccurrences(of: "^--domain\\s+", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            let domainArg = arg.isEmpty ? nil : arg
+            SecurityManager.clearStorage(domain: domainArg, profile: ProfileManager.shared.activeProfile, tabManager: mainVC.tabManager)
+        case _ where cmd.starts(with: ":forget") || cmd.starts(with: "forget"):
+            var arg = cmd.replacingOccurrences(of: "^:?forget(site)?\\s*", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
+            if arg.starts(with: "--domain ") {
+                arg = arg.replacingOccurrences(of: "^--domain\\s+", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            let domainArg = arg.isEmpty ? nil : arg
+            SecurityManager.forget(domain: domainArg, profile: ProfileManager.shared.activeProfile, tabManager: mainVC.tabManager)
+        case _ where cmd == ":js" || cmd == "js" || cmd.starts(with: ":js ") || cmd.starts(with: "js ") || cmd == ":toggle js" || cmd == "toggle js":
+            let sub = cmd.replacingOccurrences(of: "^:?(js|toggle\\s+js)\\s*", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let activeTab = mainVC.tabManager.activeTab else { break }
+            if sub == "on" {
+                activeTab.toggleJavaScript(enable: true)
+            } else if sub == "off" {
+                activeTab.toggleJavaScript(enable: false)
+            } else {
+                activeTab.toggleJavaScript()
+            }
+            let status = activeTab.isJavaScriptEnabled ? "ON" : "OFF (isolated)"
+            PluginRegistry.shared.showToast(NotificationToast(message: "JavaScript: \(status)", duration: 2.0))
+        case ":cert", "cert", ":ssl", "ssl":
+            let summary = mainVC.tabManager.activeTab?.certificateSummary() ?? "No active tab"
+            PluginRegistry.shared.showToast(NotificationToast(message: summary, duration: 4.0))
         case _ where cmd.starts(with: ":tabnew ") || cmd.starts(with: "tabnew ") || cmd.starts(with: ":t ") || cmd.starts(with: "t "):
             let urlPart = cmd.replacingOccurrences(of: "^:?(tabnew|t)\\s+", with: "", options: .regularExpression)
             OpenNewTabInputPlugin(tabManager: mainVC.tabManager).onSubmit(input: urlPart, controller: controller)
