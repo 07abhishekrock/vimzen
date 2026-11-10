@@ -5,6 +5,7 @@ import Combine
 @MainActor
 public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDelegate {
     public let id: UUID
+    public let profileId: UUID
     public let webView: WKWebView
 
     @Published public var title: String = ""
@@ -22,8 +23,13 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
 
     private var cancellables = Set<AnyCancellable>()
 
-    public init(id: UUID = UUID(), webViewConfiguration: WKWebViewConfiguration = WKWebViewConfiguration()) {
+    public init(
+        id: UUID = UUID(),
+        profileId: UUID = ProfileManager.shared.activeProfileId,
+        webViewConfiguration: WKWebViewConfiguration = WKWebViewConfiguration()
+    ) {
         self.id = id
+        self.profileId = profileId
 
         // Configure modern WKWebView settings
         webViewConfiguration.allowsAirPlayForMediaPlayback = true

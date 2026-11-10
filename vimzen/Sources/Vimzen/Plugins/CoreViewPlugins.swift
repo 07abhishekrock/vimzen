@@ -236,3 +236,53 @@ public final class TabsCountPlugin: ViewPlugin {
             .store(in: &cancellables)
     }
 }
+
+// MARK: - Profile Badge Plugin (Extreme Right of Status Bar)
+
+@MainActor
+public final class ProfileBadgePlugin: ViewPlugin {
+    public let id = "core.profile-badge"
+    public let order: Int
+
+    public let view = NSView()
+    private let badgeLabel = NSTextField(labelWithString: "[pers]")
+    private var cancellables = Set<AnyCancellable>()
+
+    public init(order: Int = 100) {
+        self.order = order
+
+        view.wantsLayer = true
+        view.translatesAutoresizingMaskIntoConstraints = false
+
+        badgeLabel.font = NSFont.monospacedSystemFont(ofSize: 10, weight: .bold)
+        badgeLabel.textColor = NSColor(calibratedRed: 0.35, green: 0.78, blue: 0.98, alpha: 1.0)
+        badgeLabel.alignment = .center
+        badgeLabel.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(badgeLabel)
+
+        NSLayoutConstraint.activate([
+            view.heightAnchor.constraint(equalToConstant: 18),
+            badgeLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 4),
+            badgeLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -8),
+            badgeLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+        ])
+    }
+
+    public func bind(bus: PluginDataBus) {
+        cancellables.removeAll()
+        bus.$activeProfile
+            .receive(on: RunLoop.main)
+            .sink { [weak self] profile in
+                guard let self = self else { return }
+                self.badgeLabel.stringValue = "[\(profile.badge)]"
+                if profile.badge == "work" {
+                    self.badgeLabel.textColor = NSColor(calibratedRed: 1.00, green: 0.58, blue: 0.00, alpha: 1.0)
+                } else if profile.badge == "anon" {
+                    self.badgeLabel.textColor = NSColor(calibratedRed: 0.69, green: 0.32, blue: 0.87, alpha: 1.0)
+                } else {
+                    self.badgeLabel.textColor = NSColor(calibratedRed: 0.35, green: 0.78, blue: 0.98, alpha: 1.0)
+                }
+            }
+            .store(in: &cancellables)
+    }
+}

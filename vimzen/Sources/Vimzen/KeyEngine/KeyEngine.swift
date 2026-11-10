@@ -254,6 +254,14 @@ public final class KeyEngine: ObservableObject {
             return true
 
         // Input Plugins (Takeover Bottom Bar)
+        case "gp":
+            clearBuffer()
+            onTriggerInputPlugin?("input.profile-picker")
+            return true
+        case "gP":
+            clearBuffer()
+            onTriggerInputPlugin?("input.move-tab-profile")
+            return true
         case "b", "T":
             clearBuffer()
             onTriggerInputPlugin?("input.tab-picker")

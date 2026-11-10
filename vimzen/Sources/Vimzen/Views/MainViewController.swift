@@ -31,11 +31,14 @@ public final class MainViewController: NSViewController {
         registry.registerViewPlugin(PageIdentityPlugin(order: 3), into: .left)
         registry.registerViewPlugin(LoadingStatusPlugin(order: 10), into: .right)
         registry.registerViewPlugin(TabsCountPlugin(order: 20), into: .right)
+        registry.registerViewPlugin(ProfileBadgePlugin(order: 100), into: .right)
 
         // Category 2: Input Plugins (Command Bar Takeovers per Architecture §10.3)
         registry.registerInputPlugin(OpenUrlInputPlugin(tabManager: tabManager, inNewTab: false))
         registry.registerInputPlugin(OpenNewTabInputPlugin(tabManager: tabManager))
         registry.registerInputPlugin(TabPickerInputPlugin(tabManager: tabManager))
+        registry.registerInputPlugin(ProfilePickerInputPlugin(tabManager: tabManager))
+        registry.registerInputPlugin(MoveTabProfileInputPlugin(tabManager: tabManager))
         registry.registerInputPlugin(CommandInputPlugin())
     }
 

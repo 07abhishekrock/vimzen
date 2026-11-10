@@ -164,6 +164,24 @@ public final class CommandInputPlugin: InputPlugin {
             mainVC.tabManager.switchToLastActiveTab()
         case ":b", "b", ":tabs", "tabs", ":buffers", "buffers":
             mainVC.keyEngine.onTriggerInputPlugin?("input.tab-picker")
+        case ":p", "p", ":profile", "profile":
+            mainVC.keyEngine.onTriggerInputPlugin?("input.profile-picker")
+        case _ where cmd.starts(with: ":p new ") || cmd.starts(with: "p new ") || cmd.starts(with: ":profile new ") || cmd.starts(with: "profile new "):
+            let name = cmd.replacingOccurrences(of: "^:?(p|profile)\\s+new\\s+", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !name.isEmpty {
+                let created = ProfileManager.shared.createProfile(name: name)
+                mainVC.tabManager.switchProfile(to: created.id)
+            }
+        case _ where cmd.starts(with: ":p ") || cmd.starts(with: "p ") || cmd.starts(with: ":profile ") || cmd.starts(with: "profile "):
+            let name = cmd.replacingOccurrences(of: "^:?(p|profile)\\s+", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
+            if let match = ProfileManager.shared.profile(named: name) {
+                mainVC.tabManager.switchProfile(to: match.id)
+            }
+        case _ where cmd.starts(with: ":send ") || cmd.starts(with: "send ") || cmd.starts(with: ":transfer ") || cmd.starts(with: "transfer "):
+            let name = cmd.replacingOccurrences(of: "^:?(send|transfer)\\s+", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
+            if let match = ProfileManager.shared.profile(named: name) {
+                mainVC.tabManager.moveCurrentTab(to: match.id)
+            }
         case _ where cmd.starts(with: ":tabnew ") || cmd.starts(with: "tabnew ") || cmd.starts(with: ":t ") || cmd.starts(with: "t "):
             let urlPart = cmd.replacingOccurrences(of: "^:?(tabnew|t)\\s+", with: "", options: .regularExpression)
             OpenNewTabInputPlugin(tabManager: mainVC.tabManager).onSubmit(input: urlPart, controller: controller)
@@ -234,6 +252,131 @@ public final class TabPickerInputPlugin: InputPlugin {
             $0.url?.host?.lowercased().contains(trimmed.lowercased()) == true
         }) {
             mainVC.tabManager.switchToTab(id: match.id)
+        }
+    }
+
+    public func onCancel(controller: AnyObject?) {
+        guard let mainVC = controller as? MainViewController else { return }
+        if let activeWebView = mainVC.tabManager.activeTab?.webView {
+            mainVC.view.window?.makeFirstResponder(activeWebView)
+        }
+    }
+}
+
+// MARK: - Profile Switcher Input Plugin (gp / :profile / :p)
+
+@MainActor
+public final class ProfilePickerInputPlugin: InputPlugin {
+    public let id = "input.profile-picker"
+    public let prompt = "PROFILE"
+    public let promptIconName: String? = "person.2.fill"
+    public let commandAliases = [":profile", ":p"]
+    public let placeholder = "Switch profile workspace (<C-j>/<C-k>, ↵ to switch)..."
+    public let isComboboxEnabled: Bool = true
+
+    private weak var tabManager: TabManager?
+    private lazy var source: ProfilePickerSource? = {
+        guard let tm = tabManager else { return nil }
+        return ProfilePickerSource(tabManager: tm)
+    }()
+
+    public init(tabManager: TabManager? = nil) {
+        self.tabManager = tabManager
+    }
+
+    public func queryItems(query: String) async -> [RankedResult] {
+        guard let source = source else { return [] }
+        let candidates = (try? await source.items(matching: query)) ?? []
+        return PickerRanking.rank(query: query, candidates: candidates, hasActiveTab: false)
+    }
+
+    public func onSubmit(input: String, controller: AnyObject?) {
+        guard let mainVC = controller as? MainViewController else { return }
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        // 1. Direct profile UUID match (from combobox selection id)
+        if trimmed.hasPrefix("profile:"), let uuid = UUID(uuidString: String(trimmed.dropFirst(8))) {
+            mainVC.tabManager.switchProfile(to: uuid)
+            return
+        }
+
+        // 2. Exact or badge match
+        if let match = ProfileManager.shared.profile(named: trimmed) {
+            mainVC.tabManager.switchProfile(to: match.id)
+            return
+        }
+
+        // 3. Substring match
+        if let match = ProfileManager.shared.profiles.first(where: {
+            $0.name.lowercased().contains(trimmed.lowercased()) ||
+            $0.badge.lowercased().contains(trimmed.lowercased())
+        }) {
+            mainVC.tabManager.switchProfile(to: match.id)
+        }
+    }
+
+    public func onCancel(controller: AnyObject?) {
+        guard let mainVC = controller as? MainViewController else { return }
+        if let activeWebView = mainVC.tabManager.activeTab?.webView {
+            mainVC.view.window?.makeFirstResponder(activeWebView)
+        }
+    }
+}
+
+// MARK: - Move Tab to Profile Input Plugin (gP / :send / :transfer)
+
+@MainActor
+public final class MoveTabProfileInputPlugin: InputPlugin {
+    public let id = "input.move-tab-profile"
+    public let prompt = "MOVE TAB"
+    public let promptIconName: String? = "arrow.right.square.fill"
+    public let commandAliases = [":send", ":transfer"]
+    public let placeholder = "Move current tab to profile (<C-j>/<C-k>, ↵ to move)..."
+    public let isComboboxEnabled: Bool = true
+
+    private weak var tabManager: TabManager?
+    private lazy var source: ProfilePickerSource? = {
+        guard let tm = tabManager else { return nil }
+        return ProfilePickerSource(tabManager: tm)
+    }()
+
+    public init(tabManager: TabManager? = nil) {
+        self.tabManager = tabManager
+    }
+
+    public func queryItems(query: String) async -> [RankedResult] {
+        guard let source = source else { return [] }
+        let candidates = (try? await source.items(matching: query)) ?? []
+        // In move tab mode, show destination profiles (other than active profile)
+        let activeId = ProfileManager.shared.activeProfileId
+        let filtered = candidates.filter { $0.id != "profile:\(activeId.uuidString)" }
+        return PickerRanking.rank(query: query, candidates: filtered.isEmpty ? candidates : filtered, hasActiveTab: false)
+    }
+
+    public func onSubmit(input: String, controller: AnyObject?) {
+        guard let mainVC = controller as? MainViewController else { return }
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        // 1. Direct profile UUID match (from combobox selection id)
+        if trimmed.hasPrefix("profile:"), let uuid = UUID(uuidString: String(trimmed.dropFirst(8))) {
+            mainVC.tabManager.moveCurrentTab(to: uuid)
+            return
+        }
+
+        // 2. Exact or badge match
+        if let match = ProfileManager.shared.profile(named: trimmed) {
+            mainVC.tabManager.moveCurrentTab(to: match.id)
+            return
+        }
+
+        // 3. Substring match
+        if let match = ProfileManager.shared.profiles.first(where: {
+            $0.name.lowercased().contains(trimmed.lowercased()) ||
+            $0.badge.lowercased().contains(trimmed.lowercased())
+        }) {
+            mainVC.tabManager.moveCurrentTab(to: match.id)
         }
     }
 

@@ -39,6 +39,14 @@ public final class ComboboxRowView: NSView {
 
         if item.badge == "TAB" {
             badgeContainer.layer?.backgroundColor = NSColor(calibratedRed: 0.20, green: 0.60, blue: 1.00, alpha: 0.85).cgColor
+        } else if item.badge == "WORK" {
+            badgeContainer.layer?.backgroundColor = NSColor(calibratedRed: 1.00, green: 0.58, blue: 0.00, alpha: 0.85).cgColor
+        } else if item.badge == "PERS" {
+            badgeContainer.layer?.backgroundColor = NSColor(calibratedRed: 0.35, green: 0.78, blue: 0.98, alpha: 0.85).cgColor
+        } else if item.badge == "ANON" {
+            badgeContainer.layer?.backgroundColor = NSColor(calibratedRed: 0.69, green: 0.32, blue: 0.87, alpha: 0.85).cgColor
+        } else if item.badge == "PROF" {
+            badgeContainer.layer?.backgroundColor = NSColor(calibratedRed: 0.30, green: 0.70, blue: 0.50, alpha: 0.85).cgColor
         } else {
             badgeContainer.layer?.backgroundColor = NSColor(calibratedWhite: 0.25, alpha: 1.0).cgColor
         }

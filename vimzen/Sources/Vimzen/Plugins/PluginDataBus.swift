@@ -10,6 +10,7 @@ public final class PluginDataBus: ObservableObject {
     @Published public private(set) var mode: Mode = .normal
     @Published public private(set) var pendingKeys: String = ""
     @Published public private(set) var tabsCount: Int = 0
+    @Published public private(set) var activeProfile: Profile = Profile.personal
     @Published public private(set) var activeTabTitle: String = ""
     @Published public private(set) var activeTabURL: URL? = nil
     @Published public private(set) var isLoading: Bool = false
@@ -40,12 +41,22 @@ public final class PluginDataBus: ObservableObject {
 
         tabManager.$tabs
             .receive(on: RunLoop.main)
-            .sink { [weak self] tabs in
-                self?.tabsCount = tabs.count
+            .sink { [weak self, weak tabManager] _ in
+                self?.tabsCount = tabManager?.currentProfileTabs.count ?? 0
             }
             .store(in: &cancellables)
 
-        tabManager.$activeTabId
+        ProfileManager.shared.$activeProfileId
+            .receive(on: RunLoop.main)
+            .sink { [weak self, weak tabManager] _ in
+                guard let self = self, let tabManager = tabManager else { return }
+                self.activeProfile = ProfileManager.shared.activeProfile
+                self.tabsCount = tabManager.currentProfileTabs.count
+                self.observeActiveTab(tabManager.activeTab)
+            }
+            .store(in: &cancellables)
+
+        tabManager.$activeTabByProfile
             .receive(on: RunLoop.main)
             .sink { [weak self, weak tabManager] _ in
                 self?.observeActiveTab(tabManager?.activeTab)
@@ -55,7 +66,8 @@ public final class PluginDataBus: ObservableObject {
         // Initial state synchronization
         mode = keyEngine.mode
         pendingKeys = keyEngine.pendingKeys
-        tabsCount = tabManager.tabs.count
+        activeProfile = ProfileManager.shared.activeProfile
+        tabsCount = tabManager.currentProfileTabs.count
         observeActiveTab(tabManager.activeTab)
     }
 

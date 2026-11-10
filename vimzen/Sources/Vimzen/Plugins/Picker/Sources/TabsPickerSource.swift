@@ -14,8 +14,8 @@ public final class TabsPickerSource: PickerSource {
     public func items(matching query: String) async throws -> [PickerItem] {
         guard let tabManager = tabManager else { return [] }
 
-        // Most recently active tabs first
-        let sortedTabs = tabManager.tabs.sorted {
+        // Most recently active tabs first, scoped to current profile
+        let sortedTabs = tabManager.currentProfileTabs.sorted {
             $0.lastActiveAt > $1.lastActiveAt
         }
 
