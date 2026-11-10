@@ -150,7 +150,7 @@ public final class ComboboxView: NSView {
 
         stackView.orientation = .vertical
         stackView.spacing = 2
-        stackView.alignment = .leading
+        stackView.alignment = .width
         stackView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stackView)
 
@@ -180,7 +180,6 @@ public final class ComboboxView: NSView {
             let rowView = ComboboxRowView(item: item)
             rowView.isSelected = (index == selectedIndex)
             rowView.translatesAutoresizingMaskIntoConstraints = false
-            rowView.widthAnchor.constraint(equalTo: stackView.widthAnchor).isActive = true
 
             rowView.onSelect = { [weak self] in
                 self?.selectedIndex = index
@@ -189,6 +188,8 @@ public final class ComboboxView: NSView {
             }
 
             stackView.addArrangedSubview(rowView)
+            rowView.leadingAnchor.constraint(equalTo: stackView.leadingAnchor).isActive = true
+            rowView.trailingAnchor.constraint(equalTo: stackView.trailingAnchor).isActive = true
             rowViews.append(rowView)
         }
 
