@@ -49,6 +49,20 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         appMenuItem.submenu = appMenu
         mainMenu.addItem(appMenuItem)
 
+        // File Menu
+        let fileMenuItem = NSMenuItem()
+        let fileMenu = NSMenu(title: "File")
+        let newTabItem = NSMenuItem(title: "New Tab", action: #selector(newTabMenuAction), keyEquivalent: "t")
+        newTabItem.target = self
+        fileMenu.addItem(newTabItem)
+
+        let closeTabItem = NSMenuItem(title: "Close Tab", action: #selector(closeTabMenuAction), keyEquivalent: "w")
+        closeTabItem.target = self
+        fileMenu.addItem(closeTabItem)
+
+        fileMenuItem.submenu = fileMenu
+        mainMenu.addItem(fileMenuItem)
+
         // Edit Menu (needed for clipboard Cmd+C, Cmd+V, Cmd+A inside inputs)
         let editMenuItem = NSMenuItem()
         let editMenu = NSMenu(title: "Edit")
@@ -60,5 +74,13 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         mainMenu.addItem(editMenuItem)
 
         NSApp.mainMenu = mainMenu
+    }
+
+    @objc private func newTabMenuAction() {
+        mainViewController?.keyEngine.onTriggerInputPlugin?("input.open-new-tab")
+    }
+
+    @objc private func closeTabMenuAction() {
+        mainViewController?.tabManager.closeActiveTab()
     }
 }

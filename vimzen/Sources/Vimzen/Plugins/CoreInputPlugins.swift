@@ -114,6 +114,11 @@ public final class CommandInputPlugin: InputPlugin {
             NSApp.terminate(nil)
         case ":r", ":reload", "r":
             mainVC.tabManager.activeTab?.reload()
+        case ":tabnew", "tabnew", ":t", "t":
+            mainVC.tabManager.createTab(url: nil, activate: true)
+        case _ where cmd.starts(with: ":tabnew ") || cmd.starts(with: "tabnew ") || cmd.starts(with: ":t ") || cmd.starts(with: "t "):
+            let urlPart = cmd.replacingOccurrences(of: "^:?(tabnew|t)\\s+", with: "", options: .regularExpression)
+            OpenNewTabInputPlugin(tabManager: mainVC.tabManager).onSubmit(input: urlPart, controller: controller)
         case _ where cmd.starts(with: ":open ") || cmd.starts(with: "open "):
             let urlPart = cmd.replacingOccurrences(of: "^:?open\\s+", with: "", options: .regularExpression)
             OpenUrlInputPlugin(tabManager: mainVC.tabManager, inNewTab: false).onSubmit(input: urlPart, controller: controller)
