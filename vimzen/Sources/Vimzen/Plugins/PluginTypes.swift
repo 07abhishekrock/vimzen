@@ -1,36 +1,48 @@
 import AppKit
 import Combine
 
-public enum PluginSlot: Sendable {
+public enum StatusSlotKind: String, Sendable, CaseIterable {
     case left
     case center
     case right
 }
 
+/// A layout container in the status bar that hosts ordered ViewPlugins.
 @MainActor
-public struct PluginContext {
-    public let mode: Mode
-    public let pendingKeys: String
-    public let activeTab: Tab?
-    public let tabsCount: Int
+public final class StatusSlot: ObservableObject {
+    public let kind: StatusSlotKind
+    @Published public private(set) var plugins: [ViewPlugin] = []
 
-    public init(mode: Mode, pendingKeys: String, activeTab: Tab?, tabsCount: Int) {
-        self.mode = mode
-        self.pendingKeys = pendingKeys
-        self.activeTab = activeTab
-        self.tabsCount = tabsCount
+    public init(kind: StatusSlotKind) {
+        self.kind = kind
+    }
+
+    public func add(_ plugin: ViewPlugin) {
+        plugins.removeAll(where: { $0.id == plugin.id })
+        plugins.append(plugin)
+        plugins.sort { $0.order < $1.order }
+    }
+
+    public func remove(id: String) {
+        plugins.removeAll(where: { $0.id == id })
+    }
+
+    public func clear() {
+        plugins.removeAll()
     }
 }
 
+/// Passive status line view element. Does not determine its own slot position.
+/// Receives the centralized `PluginDataBus` to selectively subscribe to needed state.
 @MainActor
 public protocol ViewPlugin: AnyObject {
     var id: String { get }
-    var position: PluginSlot { get }
     var order: Int { get }
     var view: NSView { get }
-    func update(with context: PluginContext)
+    func bind(bus: PluginDataBus)
 }
 
+/// Modal command bar takeover element (e.g. :open, :find, :command).
 @MainActor
 public protocol InputPlugin: AnyObject {
     var id: String { get }
@@ -41,6 +53,7 @@ public protocol InputPlugin: AnyObject {
     func onCancel(controller: AnyObject?)
 }
 
+/// Transient status bar toast notification with optional interactive shortcut key.
 @MainActor
 public struct NotificationToast: Identifiable {
     public let id: String

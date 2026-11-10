@@ -1,17 +1,20 @@
 import AppKit
+import Combine
 
 // MARK: - Mode Badge Plugin
 
 @MainActor
 public final class ModeBadgePlugin: ViewPlugin {
     public let id = "core.mode-badge"
-    public let position = PluginSlot.left
-    public let order = 1
+    public let order: Int
 
     public let view = NSView()
     private let label = NSTextField(labelWithString: "NORMAL")
+    private var cancellables = Set<AnyCancellable>()
 
-    public init() {
+    public init(order: Int = 1) {
+        self.order = order
+
         view.wantsLayer = true
         view.layer?.cornerRadius = 3
         view.layer?.masksToBounds = true
@@ -30,10 +33,16 @@ public final class ModeBadgePlugin: ViewPlugin {
         ])
     }
 
-    public func update(with context: PluginContext) {
-        label.stringValue = context.mode.badgeText
-        label.textColor = context.mode.badgeTextColor
-        view.layer?.backgroundColor = context.mode.badgeBackgroundColor.cgColor
+    public func bind(bus: PluginDataBus) {
+        cancellables.removeAll()
+        bus.$mode
+            .receive(on: RunLoop.main)
+            .sink { [weak self] mode in
+                self?.label.stringValue = mode.badgeText
+                self?.label.textColor = mode.badgeTextColor
+                self?.view.layer?.backgroundColor = mode.badgeBackgroundColor.cgColor
+            }
+            .store(in: &cancellables)
     }
 }
 
@@ -42,13 +51,15 @@ public final class ModeBadgePlugin: ViewPlugin {
 @MainActor
 public final class PendingKeysPlugin: ViewPlugin {
     public let id = "core.pending-keys"
-    public let position = PluginSlot.left
-    public let order = 2
+    public let order: Int
 
     public let view = NSView()
     private let label = NSTextField(labelWithString: "")
+    private var cancellables = Set<AnyCancellable>()
 
-    public init() {
+    public init(order: Int = 2) {
+        self.order = order
+
         view.translatesAutoresizingMaskIntoConstraints = false
         label.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .medium)
         label.textColor = NSColor(calibratedRed: 0.95, green: 0.77, blue: 0.06, alpha: 1.0)
@@ -62,9 +73,15 @@ public final class PendingKeysPlugin: ViewPlugin {
         ])
     }
 
-    public func update(with context: PluginContext) {
-        label.stringValue = context.pendingKeys
-        view.isHidden = context.pendingKeys.isEmpty
+    public func bind(bus: PluginDataBus) {
+        cancellables.removeAll()
+        bus.$pendingKeys
+            .receive(on: RunLoop.main)
+            .sink { [weak self] keys in
+                self?.label.stringValue = keys
+                self?.view.isHidden = keys.isEmpty
+            }
+            .store(in: &cancellables)
     }
 }
 
@@ -73,14 +90,16 @@ public final class PendingKeysPlugin: ViewPlugin {
 @MainActor
 public final class PageIdentityPlugin: ViewPlugin {
     public let id = "core.page-identity"
-    public let position = PluginSlot.left
-    public let order = 3
+    public let order: Int
 
     public let view = NSView()
     private let titleLabel = NSTextField(labelWithString: "Vimzen")
     private let urlLabel = NSTextField(labelWithString: "")
+    private var cancellables = Set<AnyCancellable>()
 
-    public init() {
+    public init(order: Int = 3) {
+        self.order = order
+
         view.translatesAutoresizingMaskIntoConstraints = false
 
         titleLabel.font = NSFont.systemFont(ofSize: 11, weight: .semibold)
@@ -107,16 +126,22 @@ public final class PageIdentityPlugin: ViewPlugin {
         ])
     }
 
-    public func update(with context: PluginContext) {
-        guard let tab = context.activeTab else {
-            titleLabel.stringValue = "Vimzen"
-            urlLabel.stringValue = ""
-            return
-        }
-
-        let displayTitle = tab.title.isEmpty ? (tab.url?.host ?? "Loading...") : tab.title
-        titleLabel.stringValue = displayTitle
-        urlLabel.stringValue = formatURL(tab.url)
+    public func bind(bus: PluginDataBus) {
+        cancellables.removeAll()
+        Publishers.CombineLatest(bus.$activeTabTitle, bus.$activeTabURL)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] title, url in
+                guard let self = self else { return }
+                if title.isEmpty && url == nil {
+                    self.titleLabel.stringValue = "Vimzen"
+                    self.urlLabel.stringValue = ""
+                } else {
+                    let displayTitle = title.isEmpty ? (url?.host ?? "Loading...") : title
+                    self.titleLabel.stringValue = displayTitle
+                    self.urlLabel.stringValue = self.formatURL(url)
+                }
+            }
+            .store(in: &cancellables)
     }
 
     /// Strict <= 20 character capping with "..."
@@ -146,14 +171,16 @@ public final class PageIdentityPlugin: ViewPlugin {
 @MainActor
 public final class LoadingStatusPlugin: ViewPlugin {
     public let id = "core.load-status"
-    public let position = PluginSlot.right
-    public let order = 10
+    public let order: Int
 
     public let view = NSView()
     private let spinner = NSProgressIndicator()
     private let statusLabel = NSTextField(labelWithString: "Ready")
+    private var cancellables = Set<AnyCancellable>()
 
-    public init() {
+    public init(order: Int = 10) {
+        self.order = order
+
         view.translatesAutoresizingMaskIntoConstraints = false
 
         spinner.style = .spinning
@@ -179,21 +206,22 @@ public final class LoadingStatusPlugin: ViewPlugin {
         ])
     }
 
-    public func update(with context: PluginContext) {
-        guard let tab = context.activeTab else {
-            statusLabel.stringValue = "Idle"
-            spinner.stopAnimation(nil)
-            return
-        }
-
-        if tab.isLoading && tab.estimatedProgress < 1.0 {
-            let percent = max(10, Int(tab.estimatedProgress * 100))
-            statusLabel.stringValue = "\(percent)%"
-            spinner.startAnimation(nil)
-        } else {
-            statusLabel.stringValue = "Ready"
-            spinner.stopAnimation(nil)
-        }
+    public func bind(bus: PluginDataBus) {
+        cancellables.removeAll()
+        Publishers.CombineLatest(bus.$isLoading, bus.$estimatedProgress)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] isLoading, progress in
+                guard let self = self else { return }
+                if isLoading && progress < 1.0 {
+                    let percent = max(10, Int(progress * 100))
+                    self.statusLabel.stringValue = "\(percent)%"
+                    self.spinner.startAnimation(nil)
+                } else {
+                    self.statusLabel.stringValue = "Ready"
+                    self.spinner.stopAnimation(nil)
+                }
+            }
+            .store(in: &cancellables)
     }
 }
 
@@ -202,13 +230,15 @@ public final class LoadingStatusPlugin: ViewPlugin {
 @MainActor
 public final class TabsCountPlugin: ViewPlugin {
     public let id = "core.tabs-count"
-    public let position = PluginSlot.right
-    public let order = 20
+    public let order: Int
 
     public let view = NSView()
     private let label = NSTextField(labelWithString: "0 tabs")
+    private var cancellables = Set<AnyCancellable>()
 
-    public init() {
+    public init(order: Int = 20) {
+        self.order = order
+
         view.translatesAutoresizingMaskIntoConstraints = false
         label.font = NSFont.systemFont(ofSize: 10, weight: .medium)
         label.textColor = NSColor(calibratedWhite: 0.50, alpha: 1.0)
@@ -222,7 +252,13 @@ public final class TabsCountPlugin: ViewPlugin {
         ])
     }
 
-    public func update(with context: PluginContext) {
-        label.stringValue = "\(context.tabsCount) tab\(context.tabsCount == 1 ? "" : "s")"
+    public func bind(bus: PluginDataBus) {
+        cancellables.removeAll()
+        bus.$tabsCount
+            .receive(on: RunLoop.main)
+            .sink { [weak self] count in
+                self?.label.stringValue = "\(count) tab\(count == 1 ? "" : "s")"
+            }
+            .store(in: &cancellables)
     }
 }

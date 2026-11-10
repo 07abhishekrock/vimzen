@@ -24,12 +24,12 @@ public final class MainViewController: NSViewController {
     private func registerCorePlugins() {
         let registry = PluginRegistry.shared
 
-        // Category 1: View Plugins (Passive Status Slots per Architecture §10.2)
-        registry.registerViewPlugin(ModeBadgePlugin())
-        registry.registerViewPlugin(PendingKeysPlugin())
-        registry.registerViewPlugin(PageIdentityPlugin())
-        registry.registerViewPlugin(LoadingStatusPlugin())
-        registry.registerViewPlugin(TabsCountPlugin())
+        // Category 1: View Plugins (Slot-based placement per Architecture §10.2)
+        registry.registerViewPlugin(ModeBadgePlugin(order: 1), into: .left)
+        registry.registerViewPlugin(PendingKeysPlugin(order: 2), into: .left)
+        registry.registerViewPlugin(PageIdentityPlugin(order: 3), into: .left)
+        registry.registerViewPlugin(LoadingStatusPlugin(order: 10), into: .right)
+        registry.registerViewPlugin(TabsCountPlugin(order: 20), into: .right)
 
         // Category 2: Input Plugins (Command Bar Takeovers per Architecture §10.3)
         registry.registerInputPlugin(OpenUrlInputPlugin(inNewTab: false))

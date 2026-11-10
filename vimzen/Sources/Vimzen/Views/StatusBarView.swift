@@ -25,7 +25,6 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
     public var onInputCancel: (() -> Void)?
 
     private var cancellables = Set<AnyCancellable>()
-    private var activeTabCancellables = Set<AnyCancellable>()
 
     public override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -84,7 +83,7 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
             rightStack.centerYAnchor.constraint(equalTo: centerYAnchor)
         ])
 
-        reloadPluginViews()
+        setupSlotSubscriptions()
     }
 
     private func setupToastView() {
@@ -197,33 +196,35 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
         ])
     }
 
-    public func reloadPluginViews() {
-        leftStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        centerStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        rightStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+    private func setupSlotSubscriptions() {
+        let registry = PluginRegistry.shared
 
-        for plugin in PluginRegistry.shared.plugins(for: .left) {
-            leftStack.addArrangedSubview(plugin.view)
-        }
-        for plugin in PluginRegistry.shared.plugins(for: .center) {
-            centerStack.addArrangedSubview(plugin.view)
-        }
-        for plugin in PluginRegistry.shared.plugins(for: .right) {
-            rightStack.addArrangedSubview(plugin.view)
-        }
-    }
-
-    public func bind(keyEngine: KeyEngine, tabManager: TabManager) {
-        cancellables.removeAll()
-
-        // 1. Observe plugins registration
-        PluginRegistry.shared.$viewPlugins
+        // Left Slot binding
+        registry.leftSlot.$plugins
             .receive(on: RunLoop.main)
-            .sink { [weak self] _ in self?.reloadPluginViews() }
+            .sink { [weak self] plugins in
+                self?.rebuildStack(self?.leftStack, with: plugins)
+            }
             .store(in: &cancellables)
 
-        // 2. Observe active input plugin (takeover)
-        PluginRegistry.shared.$activeInputPlugin
+        // Center Slot binding
+        registry.centerSlot.$plugins
+            .receive(on: RunLoop.main)
+            .sink { [weak self] plugins in
+                self?.rebuildStack(self?.centerStack, with: plugins)
+            }
+            .store(in: &cancellables)
+
+        // Right Slot binding
+        registry.rightSlot.$plugins
+            .receive(on: RunLoop.main)
+            .sink { [weak self] plugins in
+                self?.rebuildStack(self?.rightStack, with: plugins)
+            }
+            .store(in: &cancellables)
+
+        // Active Input Plugin Takeover binding
+        registry.$activeInputPlugin
             .receive(on: RunLoop.main)
             .sink { [weak self] activePlugin in
                 guard let self = self else { return }
@@ -235,8 +236,8 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
             }
             .store(in: &cancellables)
 
-        // 3. Observe active notification toast
-        PluginRegistry.shared.$activeToast
+        // Active Notification Toast binding
+        registry.$activeToast
             .receive(on: RunLoop.main)
             .sink { [weak self] toast in
                 guard let self = self else { return }
@@ -254,39 +255,19 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
                 }
             }
             .store(in: &cancellables)
-
-        // 4. Update all view plugins on key/tab changes
-        Publishers.CombineLatest4(keyEngine.$mode, keyEngine.$pendingKeys, tabManager.$tabs, tabManager.$activeTabId)
-            .receive(on: RunLoop.main)
-            .sink { [weak self, weak tabManager] (mode, keys, tabs, _) in
-                guard let self = self, let tm = tabManager else { return }
-                self.broadcastUpdate(mode: mode, pendingKeys: keys, activeTab: tm.activeTab, tabsCount: tabs.count)
-                self.bindActiveTab(tm.activeTab, keyEngine: keyEngine, tabManager: tm)
-            }
-            .store(in: &cancellables)
-
-        broadcastUpdate(mode: keyEngine.mode, pendingKeys: keyEngine.pendingKeys, activeTab: tabManager.activeTab, tabsCount: tabManager.tabs.count)
-        bindActiveTab(tabManager.activeTab, keyEngine: keyEngine, tabManager: tabManager)
     }
 
-    private func bindActiveTab(_ tab: Tab?, keyEngine: KeyEngine, tabManager: TabManager) {
-        activeTabCancellables.removeAll()
-        guard let tab = tab else { return }
-
-        Publishers.CombineLatest4(tab.$title, tab.$url, tab.$isLoading, tab.$estimatedProgress)
-            .receive(on: RunLoop.main)
-            .sink { [weak self, weak keyEngine, weak tabManager] _ in
-                guard let self = self, let ke = keyEngine, let tm = tabManager else { return }
-                self.broadcastUpdate(mode: ke.mode, pendingKeys: ke.pendingKeys, activeTab: tab, tabsCount: tm.tabs.count)
-            }
-            .store(in: &activeTabCancellables)
-    }
-
-    private func broadcastUpdate(mode: Mode, pendingKeys: String, activeTab: Tab?, tabsCount: Int) {
-        let ctx = PluginContext(mode: mode, pendingKeys: pendingKeys, activeTab: activeTab, tabsCount: tabsCount)
-        for plugin in PluginRegistry.shared.viewPlugins {
-            plugin.update(with: ctx)
+    private func rebuildStack(_ stack: NSStackView?, with plugins: [ViewPlugin]) {
+        guard let stack = stack else { return }
+        stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        for plugin in plugins {
+            stack.addArrangedSubview(plugin.view)
         }
+    }
+
+    public func bind(keyEngine: KeyEngine, tabManager: TabManager) {
+        // Connect the centralized reactive telemetry bus
+        PluginDataBus.shared.attach(keyEngine: keyEngine, tabManager: tabManager)
     }
 
     private func showInputTakeover(plugin: InputPlugin) {

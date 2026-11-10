@@ -5,7 +5,10 @@ import Combine
 public final class PluginRegistry: ObservableObject {
     public static let shared = PluginRegistry()
 
-    @Published public private(set) var viewPlugins: [ViewPlugin] = []
+    public let leftSlot = StatusSlot(kind: .left)
+    public let centerSlot = StatusSlot(kind: .center)
+    public let rightSlot = StatusSlot(kind: .right)
+
     @Published public private(set) var inputPlugins: [String: InputPlugin] = [:]
     @Published public private(set) var activeInputPlugin: InputPlugin?
     @Published public private(set) var activeToast: NotificationToast?
@@ -14,10 +17,19 @@ public final class PluginRegistry: ObservableObject {
 
     public init() {}
 
-    public func registerViewPlugin(_ plugin: ViewPlugin) {
-        viewPlugins.removeAll(where: { $0.id == plugin.id })
-        viewPlugins.append(plugin)
-        viewPlugins.sort { $0.order < $1.order }
+    public func slot(for kind: StatusSlotKind) -> StatusSlot {
+        switch kind {
+        case .left: return leftSlot
+        case .center: return centerSlot
+        case .right: return rightSlot
+        }
+    }
+
+    /// Registers a view plugin into a specific status bar slot.
+    /// The plugin is automatically bound to the centralized PluginDataBus.
+    public func registerViewPlugin(_ plugin: ViewPlugin, into slotKind: StatusSlotKind) {
+        plugin.bind(bus: PluginDataBus.shared)
+        slot(for: slotKind).add(plugin)
     }
 
     public func registerInputPlugin(_ plugin: InputPlugin) {
@@ -25,10 +37,6 @@ public final class PluginRegistry: ObservableObject {
         for alias in plugin.commandAliases {
             inputPlugins[alias] = plugin
         }
-    }
-
-    public func plugins(for slot: PluginSlot) -> [ViewPlugin] {
-        return viewPlugins.filter { $0.position == slot }
     }
 
     public func activateInputPlugin(id: String) -> InputPlugin? {
