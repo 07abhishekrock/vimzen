@@ -237,6 +237,62 @@ public final class TabsCountPlugin: ViewPlugin {
     }
 }
 
+// MARK: - Media Status Badge Plugin
+
+@MainActor
+public final class MediaBadgePlugin: ViewPlugin {
+    public let id = "core.media-badge"
+    public let order: Int
+
+    public let view = NSView()
+    private let label = NSTextField(labelWithString: "🔊")
+    private var cancellables = Set<AnyCancellable>()
+
+    public init(order: Int = 15) {
+        self.order = order
+
+        view.translatesAutoresizingMaskIntoConstraints = false
+        label.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .bold)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(label)
+
+        NSLayoutConstraint.activate([
+            view.heightAnchor.constraint(equalToConstant: 26),
+            label.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 4),
+            label.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -4),
+            label.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+        ])
+
+        view.isHidden = true
+    }
+
+    public func bind(bus: PluginDataBus) {
+        cancellables.removeAll()
+
+        Publishers.CombineLatest3(bus.$audibleTabsCount, bus.$activeTabIsAudible, bus.$activeTabIsMuted)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] audibleCount, isAudible, isMuted in
+                guard let self = self else { return }
+
+                if isMuted {
+                    self.view.isHidden = false
+                    self.label.stringValue = "🔇 [MUTED]"
+                    self.label.textColor = NSColor(calibratedRed: 0.98, green: 0.42, blue: 0.42, alpha: 1.0)
+                } else if isAudible || audibleCount > 0 {
+                    self.view.isHidden = false
+                    let countSuffix = audibleCount > 1 ? " \(audibleCount)" : ""
+                    self.label.stringValue = "🔊\(countSuffix)"
+                    self.label.textColor = NSColor(calibratedRed: 0.20, green: 0.85, blue: 0.45, alpha: 1.0)
+                } else {
+                    // Zen default: completely hidden when idle
+                    self.view.isHidden = true
+                    self.label.stringValue = ""
+                }
+            }
+            .store(in: &cancellables)
+    }
+}
+
 // MARK: - Profile Badge Plugin (Extreme Right of Status Bar)
 
 @MainActor

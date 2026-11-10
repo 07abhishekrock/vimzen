@@ -42,6 +42,7 @@ public final class ProfileManager: ObservableObject {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = dataStore(for: profile)
         config.allowsAirPlayForMediaPlayback = true
+        config.mediaTypesRequiringUserActionForPlayback = .all
         let preferences = WKWebpagePreferences()
         preferences.allowsContentJavaScript = true
         config.defaultWebpagePreferences = preferences

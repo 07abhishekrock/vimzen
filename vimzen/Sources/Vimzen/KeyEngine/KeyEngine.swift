@@ -40,6 +40,29 @@ public final class KeyEngine: ObservableObject {
     public func processKeyEvent(_ event: NSEvent) -> Bool {
         let isCtrl = event.modifierFlags.contains(.control)
 
+        // CONFIRM PROMPT (Category 4: Y/n bar takeover active)
+        if let confirm = PluginRegistry.shared.activeConfirmPrompt {
+            if event.keyCode == 53 || (isCtrl && event.charactersIgnoringModifiers == "[") {
+                PluginRegistry.shared.dismissConfirm()
+                return true
+            }
+            if event.keyCode == 36 { // Enter
+                PluginRegistry.shared.resolveConfirm(with: confirm.defaultYes)
+                return true
+            }
+            if let chars = event.characters?.lowercased() {
+                if chars == "y" {
+                    PluginRegistry.shared.resolveConfirm(with: true)
+                    return true
+                } else if chars == "n" {
+                    PluginRegistry.shared.resolveConfirm(with: false)
+                    return true
+                }
+            }
+            // Swallow all other keys while confirm prompt is active
+            return true
+        }
+
         // COMMAND mode (Input plugin takeover active)
         if mode == .command {
             if event.keyCode == 53 || (isCtrl && event.charactersIgnoringModifiers == "[") {
@@ -73,6 +96,18 @@ public final class KeyEngine: ObservableObject {
             return false
         }
 
+        // SEARCH mode (Find in page takeover active)
+        if mode == .search {
+            if event.keyCode == 53 || (isCtrl && event.charactersIgnoringModifiers == "[") {
+                // Escape or Ctrl-[ cancels the active search
+                setMode(.normal)
+                onCancelInputPlugin?()
+                return true
+            }
+            // Pass all keystrokes through to the search text field
+            return false
+        }
+
         // INSERT mode handling
         if mode == .insert {
             if event.keyCode == 53 || (isCtrl && event.charactersIgnoringModifiers == "[") {
@@ -87,6 +122,7 @@ public final class KeyEngine: ObservableObject {
         // NORMAL mode: all keys are evaluated or swallowed from the webpage!
         if event.keyCode == 53 { // Escape
             clearBuffer()
+            tabManager?.activeTab?.clearFindMatches()
             PluginRegistry.shared.clearToast()
             return true
         }
@@ -96,8 +132,11 @@ public final class KeyEngine: ObservableObject {
             guard let base = event.charactersIgnoringModifiers?.lowercased(), !base.isEmpty else {
                 return false
             }
+            let isShift = event.modifierFlags.contains(.shift)
             if event.keyCode == 48 {
                 chord = "<C-Tab>"
+            } else if isShift {
+                chord = "<C-S-\(base)>"
             } else {
                 chord = "<C-\(base)>"
             }
@@ -117,6 +156,8 @@ public final class KeyEngine: ObservableObject {
                 case "t": chord = "T"
                 case "d": chord = "D"
                 case "p": chord = "P"
+                case "m": chord = "M"
+                case "n": chord = "N"
                 default:  chord = chars
                 }
             } else if event.keyCode == 48 {
@@ -249,6 +290,24 @@ public final class KeyEngine: ObservableObject {
             tabManager.switchToLastActiveProfile()
             clearBuffer()
             return true
+
+        // Media Controls
+        case "<C-m>":
+            tabManager.toggleActiveTabMute()
+            clearBuffer()
+            return true
+        case "<C-S-m>":
+            tabManager.toggleMuteAllAudibleTabs()
+            clearBuffer()
+            return true
+        case "M", "gm":
+            tabManager.cycleMediaTabs(delta: 1)
+            clearBuffer()
+            return true
+        case "gM":
+            tabManager.cycleMediaTabs(delta: -1)
+            clearBuffer()
+            return true
         case "x", ":q":
             // Close tab and display 4s interactive undo toast (§10.4)
             if let closing = activeTab {
@@ -276,6 +335,18 @@ public final class KeyEngine: ObservableObject {
             return true
 
         // Input Plugins (Takeover Bottom Bar)
+        case "/":
+            clearBuffer()
+            onTriggerInputPlugin?("input.find")
+            return true
+        case "n":
+            activeTab?.findNext(count: count)
+            clearBuffer()
+            return true
+        case "N":
+            activeTab?.findPrevious(count: count)
+            clearBuffer()
+            return true
         case "gh", ",h":
             clearBuffer()
             onTriggerInputPlugin?("input.history-picker")

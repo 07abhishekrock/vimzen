@@ -35,6 +35,7 @@ public final class MainViewController: NSViewController {
         registry.registerViewPlugin(PendingKeysPlugin(order: 2), into: .left)
         registry.registerViewPlugin(PageIdentityPlugin(order: 3), into: .left)
         registry.registerViewPlugin(LoadingStatusPlugin(order: 10), into: .right)
+        registry.registerViewPlugin(MediaBadgePlugin(order: 15), into: .right)
         registry.registerViewPlugin(TabsCountPlugin(order: 20), into: .right)
         registry.registerViewPlugin(ProfileBadgePlugin(order: 100), into: .right)
 
@@ -45,6 +46,7 @@ public final class MainViewController: NSViewController {
         registry.registerInputPlugin(ProfilePickerInputPlugin(tabManager: tabManager))
         registry.registerInputPlugin(MoveTabProfileInputPlugin(tabManager: tabManager))
         registry.registerInputPlugin(HistoryPickerInputPlugin())
+        registry.registerInputPlugin(FindInputPlugin(tabManager: tabManager))
         registry.registerInputPlugin(CommandInputPlugin())
     }
 
@@ -112,11 +114,12 @@ public final class MainViewController: NSViewController {
             self?.statusBar.submitCurrentInput(openInNewTab: true, forceRawInput: true)
         }
 
-        // Trigger input plugin takeover (e.g. 'o', 'O', ':')
+        // Trigger input plugin takeover (e.g. 'o', 'O', ':', '/')
         keyEngine.onTriggerInputPlugin = { [weak self] pluginId in
             guard let self = self else { return }
             if PluginRegistry.shared.activateInputPlugin(id: pluginId) != nil {
-                self.keyEngine.setMode(.command)
+                let targetMode: Mode = (pluginId == "input.find") ? .search : .command
+                self.keyEngine.setMode(targetMode)
                 let prefill = (pluginId == "input.open") ? (self.tabManager.activeTab?.url?.absoluteString ?? "") : ""
                 self.statusBar.activateInput(prefill: prefill)
             }

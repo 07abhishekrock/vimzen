@@ -12,6 +12,7 @@ public final class PluginRegistry: ObservableObject {
     @Published public private(set) var inputPlugins: [String: InputPlugin] = [:]
     @Published public private(set) var activeInputPlugin: InputPlugin?
     @Published public private(set) var activeToast: NotificationToast?
+    @Published public private(set) var activeConfirmPrompt: ConfirmPrompt?
 
     private var toastTimer: Timer?
 
@@ -63,5 +64,35 @@ public final class PluginRegistry: ObservableObject {
         toastTimer?.invalidate()
         toastTimer = nil
         activeToast = nil
+    }
+
+    public func confirm(
+        prompt: String = "CONFIRM",
+        promptIcon: String? = "questionmark.circle.fill",
+        message: String,
+        defaultYes: Bool = true
+    ) async -> Bool {
+        await withCheckedContinuation { continuation in
+            let cp = ConfirmPrompt(
+                prompt: prompt,
+                promptIconName: promptIcon,
+                message: message,
+                defaultYes: defaultYes
+            ) { [weak self] result in
+                self?.activeConfirmPrompt = nil
+                continuation.resume(returning: result)
+            }
+            self.activeConfirmPrompt = cp
+        }
+    }
+
+    public func resolveConfirm(with answer: Bool) {
+        guard let prompt = activeConfirmPrompt else { return }
+        prompt.onResolve(answer)
+    }
+
+    public func dismissConfirm() {
+        guard let prompt = activeConfirmPrompt else { return }
+        prompt.onResolve(false)
     }
 }

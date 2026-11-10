@@ -93,7 +93,7 @@ public struct NotificationToast: Identifiable {
         message: String,
         actionKey: String? = nil,
         actionLabel: String? = nil,
-        duration: TimeInterval = 4.0,
+        duration: TimeInterval = 1.0,
         onAction: (@MainActor () -> Void)? = nil
     ) {
         self.id = id
@@ -102,5 +102,32 @@ public struct NotificationToast: Identifiable {
         self.actionLabel = actionLabel
         self.duration = duration
         self.onAction = onAction
+    }
+}
+
+/// Interactive confirmation prompt modal (Category 4: Y/n bar takeover).
+@MainActor
+public struct ConfirmPrompt: Identifiable {
+    public let id: String
+    public let prompt: String
+    public let promptIconName: String?
+    public let message: String
+    public let defaultYes: Bool
+    public let onResolve: @MainActor (Bool) -> Void
+
+    public init(
+        id: String = UUID().uuidString,
+        prompt: String = "CONFIRM",
+        promptIconName: String? = "questionmark.circle.fill",
+        message: String,
+        defaultYes: Bool = true,
+        onResolve: @escaping @MainActor (Bool) -> Void
+    ) {
+        self.id = id
+        self.prompt = prompt
+        self.promptIconName = promptIconName
+        self.message = message
+        self.defaultYes = defaultYes
+        self.onResolve = onResolve
     }
 }

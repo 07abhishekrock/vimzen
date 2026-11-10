@@ -5,14 +5,11 @@ import Combine
 public final class TabManager: ObservableObject {
     @Published public private(set) var tabs: [Tab] = []
     @Published public private(set) var activeTabByProfile: [UUID: UUID] = [:]
+    @Published public private(set) var activeTabId: UUID?
     public private(set) var previousActiveTabByProfile: [UUID: UUID] = [:]
 
     public var currentProfileTabs: [Tab] {
         tabs.filter { $0.profileId == ProfileManager.shared.activeProfileId }
-    }
-
-    public var activeTabId: UUID? {
-        activeTabByProfile[ProfileManager.shared.activeProfileId]
     }
 
     public var previousActiveTabId: UUID? {
@@ -78,6 +75,7 @@ public final class TabManager: ObservableObject {
             previousActiveTabByProfile[profileId] = activeTabByProfile[profileId]
         }
         activeTabByProfile[profileId] = id
+        activeTabId = id
 
         for t in tabs {
             let isActive = (t.id == id)
@@ -255,5 +253,86 @@ public final class TabManager: ObservableObject {
                 }
             }
         }
+    }
+
+    // MARK: - Media Controls
+
+    public var audibleTabsCount: Int {
+        tabs.filter { $0.isAudible }.count
+    }
+
+    public func toggleActiveTabMute() {
+        guard let current = activeTab else { return }
+        current.toggleMute()
+        let state = current.isMuted ? "Muted" : "Unmuted"
+        PluginRegistry.shared.showToast(
+            NotificationToast(message: "\(state): \(current.title.isEmpty ? "Tab" : current.title)", duration: 2.0)
+        )
+    }
+
+    public func toggleMuteAllAudibleTabs() {
+        let audibleTabs = tabs.filter { $0.isAudible || $0.isPlayingMedia }
+        if audibleTabs.contains(where: { !$0.isMuted }) {
+            // Mute all playing tabs
+            for tab in audibleTabs {
+                tab.toggleMute(enable: true)
+            }
+            PluginRegistry.shared.showToast(
+                NotificationToast(message: "Muted all media tabs (\(audibleTabs.count))", duration: 2.0)
+            )
+        } else {
+            // Unmute all
+            let mutedTabs = tabs.filter { $0.isMuted }
+            for tab in mutedTabs {
+                tab.toggleMute(enable: false)
+            }
+            PluginRegistry.shared.showToast(
+                NotificationToast(message: "Unmuted all media tabs", duration: 2.0)
+            )
+        }
+    }
+
+    public func cycleMediaTabs(delta: Int = 1) {
+        var candidates = tabs.filter { $0.isAudible || $0.isPlayingMedia || $0.lastAudibleAt != nil }
+        if candidates.isEmpty {
+            PluginRegistry.shared.showToast(
+                NotificationToast(message: "No media tabs playing or recently active", duration: 2.0)
+            )
+            return
+        }
+
+        // Rank candidates per Architecture §5.2:
+        // 1. Currently audible & unmuted (most recent first)
+        // 2. Currently playing but muted
+        // 3. Paused / recently audible
+        candidates.sort { a, b in
+            let scoreA: Int = (a.isAudible && !a.isMuted) ? 3 : (a.isPlayingMedia ? 2 : 1)
+            let scoreB: Int = (b.isAudible && !b.isMuted) ? 3 : (b.isPlayingMedia ? 2 : 1)
+            if scoreA != scoreB {
+                return scoreA > scoreB
+            }
+            let timeA = a.lastAudibleAt ?? a.lastActiveAt
+            let timeB = b.lastAudibleAt ?? b.lastActiveAt
+            return timeA > timeB
+        }
+
+        guard let active = activeTab, let currentIndex = candidates.firstIndex(where: { $0.id == active.id }) else {
+            // Jump to top candidate
+            let target = candidates[0]
+            switchToTab(id: target.id)
+            PluginRegistry.shared.showToast(
+                NotificationToast(message: "Media: \(target.title.isEmpty ? (target.url?.host ?? "Tab") : target.title)", duration: 2.0)
+            )
+            return
+        }
+
+        // Cycle to next/prev candidate in ring order
+        let total = candidates.count
+        let nextIndex = ((currentIndex + delta) % total + total) % total
+        let target = candidates[nextIndex]
+        switchToTab(id: target.id)
+        PluginRegistry.shared.showToast(
+            NotificationToast(message: "Media: \(target.title.isEmpty ? (target.url?.host ?? "Tab") : target.title)", duration: 2.0)
+        )
     }
 }

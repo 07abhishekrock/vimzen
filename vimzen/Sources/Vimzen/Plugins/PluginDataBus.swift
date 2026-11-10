@@ -14,6 +14,9 @@ public final class PluginDataBus: ObservableObject {
     @Published public private(set) var activeTabTitle: String = ""
     @Published public private(set) var activeTabURL: URL? = nil
     @Published public private(set) var activeTabTopColor: NSColor? = nil
+    @Published public private(set) var audibleTabsCount: Int = 0
+    @Published public private(set) var activeTabIsAudible: Bool = false
+    @Published public private(set) var activeTabIsMuted: Bool = false
     @Published public private(set) var isLoading: Bool = false
     @Published public private(set) var estimatedProgress: Double = 0.0
 
@@ -43,7 +46,9 @@ public final class PluginDataBus: ObservableObject {
         tabManager.$tabs
             .receive(on: RunLoop.main)
             .sink { [weak self, weak tabManager] _ in
-                self?.tabsCount = tabManager?.currentProfileTabs.count ?? 0
+                guard let self = self, let tabManager = tabManager else { return }
+                self.tabsCount = tabManager.currentProfileTabs.count
+                self.audibleTabsCount = tabManager.audibleTabsCount
             }
             .store(in: &cancellables)
 
@@ -57,10 +62,12 @@ public final class PluginDataBus: ObservableObject {
             }
             .store(in: &cancellables)
 
-        tabManager.$activeTabByProfile
+        tabManager.$activeTabId
             .receive(on: RunLoop.main)
-            .sink { [weak self, weak tabManager] _ in
-                self?.observeActiveTab(tabManager?.activeTab)
+            .sink { [weak self, weak tabManager] tabId in
+                guard let self = self, let tabManager = tabManager else { return }
+                let current = tabManager.tabs.first(where: { $0.id == tabId })
+                self.observeActiveTab(current)
             }
             .store(in: &cancellables)
 
@@ -78,10 +85,29 @@ public final class PluginDataBus: ObservableObject {
             activeTabTitle = ""
             activeTabURL = nil
             activeTabTopColor = nil
+            activeTabIsAudible = false
+            activeTabIsMuted = false
             isLoading = false
             estimatedProgress = 0.0
             return
         }
+
+        tab.$isAudible
+            .receive(on: RunLoop.main)
+            .sink { [weak self] audible in
+                self?.activeTabIsAudible = audible
+            }
+            .store(in: &activeTabCancellables)
+
+        tab.$isMuted
+            .receive(on: RunLoop.main)
+            .sink { [weak self] muted in
+                self?.activeTabIsMuted = muted
+            }
+            .store(in: &activeTabCancellables)
+
+        activeTabIsAudible = tab.isAudible
+        activeTabIsMuted = tab.isMuted
 
         tab.$topColor
             .receive(on: RunLoop.main)

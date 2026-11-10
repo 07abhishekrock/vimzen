@@ -21,6 +21,15 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
     public let inputTextField = NSTextField()
     private let inputHintLabel = NSTextField(labelWithString: "esc: cancel   ↵: confirm")
 
+    // Confirm Prompt Takeover View (Category 4)
+    private let confirmTakeoverView = NSView()
+    private let confirmPromptContainer = NSView()
+    private let confirmPromptIconView = NSImageView()
+    private let confirmPromptArrow = NSTextField(labelWithString: "❯")
+    private let confirmMessageLabel = NSTextField(labelWithString: "")
+    private let confirmChoiceLabel = NSTextField(labelWithString: "[Y/n]")
+    private let confirmHintLabel = NSTextField(labelWithString: "↵/y: yes   n/esc: cancel")
+
     public weak var combobox: ComboboxView?
     private var queryTask: Task<Void, Never>?
 
@@ -209,6 +218,73 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
             inputHintLabel.trailingAnchor.constraint(equalTo: inputTakeoverView.trailingAnchor, constant: -8),
             inputHintLabel.centerYAnchor.constraint(equalTo: inputTakeoverView.centerYAnchor)
         ])
+
+        // Setup Confirm Prompt Takeover View (Category 4)
+        confirmTakeoverView.wantsLayer = true
+        confirmTakeoverView.layer?.backgroundColor = NSColor(calibratedWhite: 0.11, alpha: 1.0).cgColor
+        confirmTakeoverView.translatesAutoresizingMaskIntoConstraints = false
+        confirmTakeoverView.isHidden = true
+        addSubview(confirmTakeoverView)
+
+        confirmPromptContainer.wantsLayer = true
+        confirmPromptContainer.layer?.backgroundColor = NSColor(calibratedRed: 0.95, green: 0.65, blue: 0.15, alpha: 1.0).cgColor
+        confirmPromptContainer.translatesAutoresizingMaskIntoConstraints = false
+
+        confirmPromptIconView.imageScaling = .scaleProportionallyDown
+        confirmPromptIconView.contentTintColor = .white
+        confirmPromptIconView.translatesAutoresizingMaskIntoConstraints = false
+        confirmPromptContainer.addSubview(confirmPromptIconView)
+
+        confirmPromptArrow.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .bold)
+        confirmPromptArrow.textColor = NSColor(calibratedRed: 0.95, green: 0.65, blue: 0.15, alpha: 1.0)
+        confirmPromptArrow.translatesAutoresizingMaskIntoConstraints = false
+
+        confirmMessageLabel.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .medium)
+        confirmMessageLabel.textColor = .white
+        confirmMessageLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        confirmChoiceLabel.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .bold)
+        confirmChoiceLabel.textColor = NSColor(calibratedRed: 0.95, green: 0.77, blue: 0.06, alpha: 1.0)
+        confirmChoiceLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        confirmHintLabel.font = NSFont.monospacedSystemFont(ofSize: 10, weight: .medium)
+        confirmHintLabel.textColor = NSColor(calibratedWhite: 0.45, alpha: 1.0)
+        confirmHintLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        confirmTakeoverView.addSubview(confirmPromptContainer)
+        confirmTakeoverView.addSubview(confirmPromptArrow)
+        confirmTakeoverView.addSubview(confirmMessageLabel)
+        confirmTakeoverView.addSubview(confirmChoiceLabel)
+        confirmTakeoverView.addSubview(confirmHintLabel)
+
+        NSLayoutConstraint.activate([
+            confirmTakeoverView.topAnchor.constraint(equalTo: topAnchor),
+            confirmTakeoverView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            confirmTakeoverView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            confirmTakeoverView.trailingAnchor.constraint(equalTo: trailingAnchor),
+
+            confirmPromptContainer.leadingAnchor.constraint(equalTo: confirmTakeoverView.leadingAnchor),
+            confirmPromptContainer.topAnchor.constraint(equalTo: confirmTakeoverView.topAnchor),
+            confirmPromptContainer.bottomAnchor.constraint(equalTo: confirmTakeoverView.bottomAnchor),
+            confirmPromptContainer.widthAnchor.constraint(equalToConstant: 32),
+
+            confirmPromptIconView.centerXAnchor.constraint(equalTo: confirmPromptContainer.centerXAnchor),
+            confirmPromptIconView.centerYAnchor.constraint(equalTo: confirmPromptContainer.centerYAnchor),
+            confirmPromptIconView.widthAnchor.constraint(equalToConstant: 14),
+            confirmPromptIconView.heightAnchor.constraint(equalToConstant: 14),
+
+            confirmPromptArrow.leadingAnchor.constraint(equalTo: confirmPromptContainer.trailingAnchor, constant: 6),
+            confirmPromptArrow.centerYAnchor.constraint(equalTo: confirmTakeoverView.centerYAnchor),
+
+            confirmMessageLabel.leadingAnchor.constraint(equalTo: confirmPromptArrow.trailingAnchor, constant: 6),
+            confirmMessageLabel.centerYAnchor.constraint(equalTo: confirmTakeoverView.centerYAnchor),
+
+            confirmChoiceLabel.leadingAnchor.constraint(equalTo: confirmMessageLabel.trailingAnchor, constant: 8),
+            confirmChoiceLabel.centerYAnchor.constraint(equalTo: confirmTakeoverView.centerYAnchor),
+
+            confirmHintLabel.trailingAnchor.constraint(equalTo: confirmTakeoverView.trailingAnchor, constant: -8),
+            confirmHintLabel.centerYAnchor.constraint(equalTo: confirmTakeoverView.centerYAnchor)
+        ])
     }
 
     private func setupSlotSubscriptions() {
@@ -270,6 +346,19 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
                 }
             }
             .store(in: &cancellables)
+
+        // Active Confirm Prompt binding (Category 4)
+        registry.$activeConfirmPrompt
+            .receive(on: RunLoop.main)
+            .sink { [weak self] prompt in
+                guard let self = self else { return }
+                if let p = prompt {
+                    self.showConfirmTakeover(p)
+                } else {
+                    self.hideConfirmTakeover()
+                }
+            }
+            .store(in: &cancellables)
     }
 
     private func rebuildStack(_ stack: NSStackView?, with plugins: [ViewPlugin]) {
@@ -302,6 +391,14 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
         inputTakeoverView.isHidden = false
         window?.makeFirstResponder(inputTextField)
 
+        if plugin.id == "input.find" {
+            inputHintLabel.stringValue = "[0/0]"
+            inputHintLabel.textColor = NSColor(calibratedRed: 0.95, green: 0.77, blue: 0.06, alpha: 1.0)
+        } else {
+            inputHintLabel.stringValue = "esc: cancel   ↵: confirm"
+            inputHintLabel.textColor = NSColor(calibratedWhite: 0.45, alpha: 1.0)
+        }
+
         if plugin.isComboboxEnabled {
             runComboboxQuery(inputTextField.stringValue, debounce: false)
         } else {
@@ -313,6 +410,21 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
         inputTakeoverView.isHidden = true
         queryTask?.cancel()
         combobox?.hide()
+    }
+
+    private func showConfirmTakeover(_ prompt: ConfirmPrompt) {
+        let iconName = prompt.promptIconName ?? "questionmark.circle.fill"
+        let config = NSImage.SymbolConfiguration(pointSize: 11, weight: .bold)
+        confirmPromptIconView.image = NSImage(systemSymbolName: iconName, accessibilityDescription: prompt.prompt)?.withSymbolConfiguration(config)
+        confirmPromptIconView.contentTintColor = .white
+
+        confirmMessageLabel.stringValue = prompt.message
+        confirmChoiceLabel.stringValue = prompt.defaultYes ? "[Y/n]" : "[y/N]"
+        confirmTakeoverView.isHidden = false
+    }
+
+    private func hideConfirmTakeover() {
+        confirmTakeoverView.isHidden = true
     }
 
     public func activateInput(prefill: String = "") {
@@ -365,8 +477,22 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
     // MARK: - NSTextFieldDelegate
 
     public func controlTextDidChange(_ obj: Notification) {
-        if let plugin = PluginRegistry.shared.activeInputPlugin, plugin.isComboboxEnabled {
-            runComboboxQuery(inputTextField.stringValue, debounce: true)
+        if let plugin = PluginRegistry.shared.activeInputPlugin {
+            if plugin.id == "input.find" {
+                let query = inputTextField.stringValue
+                if !query.isEmpty {
+                    (NSApp.keyWindow?.contentViewController as? MainViewController)?.tabManager.activeTab?.findInPage(query, forward: true, notifyIfNotFound: false) { [weak self] current, total in
+                        self?.inputHintLabel.stringValue = "[\(current)/\(total)]"
+                        self?.inputHintLabel.textColor = (total > 0)
+                            ? NSColor(calibratedRed: 0.95, green: 0.77, blue: 0.06, alpha: 1.0)
+                            : NSColor(calibratedRed: 0.95, green: 0.40, blue: 0.40, alpha: 1.0)
+                    }
+                } else {
+                    inputHintLabel.stringValue = "[0/0]"
+                }
+            } else if plugin.isComboboxEnabled {
+                runComboboxQuery(inputTextField.stringValue, debounce: true)
+            }
         }
     }
 

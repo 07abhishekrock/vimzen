@@ -18,12 +18,22 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
     @Published public var canGoForward: Bool = false
     @Published public var isJavaScriptEnabled: Bool = true
     @Published public private(set) var topColor: NSColor? = nil
+    @Published public var isAudible: Bool = false
+    @Published public var isPlayingMedia: Bool = false
+    @Published public var isMuted: Bool = false
+    @Published public var mediaKind: String = "none"
+    public var lastSearchQuery: String = ""
+    public var currentSearchIndex: Int = 0
+    public var totalSearchMatches: Int = 0
+    public private(set) var lastAudibleAt: Date? = nil
     public private(set) var currentServerTrust: SecTrust?
     public private(set) var isNewTabScratchpad: Bool = false
     public private(set) var lastActiveAt: Date = Date()
 
     private var customTopColor: NSColor? = nil
     private var detectedTopColor: NSColor? = nil
+    private var silenceDebounceTask: Task<Void, Never>?
+    private var bypassInsecureWarningURLs = Set<URL>()
     private let scriptBridge = VimzenScriptBridge()
 
     public func markActive() {
@@ -42,6 +52,7 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
 
         // Configure modern WKWebView settings
         webViewConfiguration.allowsAirPlayForMediaPlayback = true
+        webViewConfiguration.mediaTypesRequiringUserActionForPlayback = .all
         let preferences = WKWebpagePreferences()
         preferences.allowsContentJavaScript = true
         webViewConfiguration.defaultWebpagePreferences = preferences
@@ -50,7 +61,7 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
         let userScript = WKUserScript(
             source: VimzenScriptBridge.injectedScriptSource,
             injectionTime: .atDocumentStart,
-            forMainFrameOnly: true
+            forMainFrameOnly: false
         )
         webViewConfiguration.userContentController.addUserScript(userScript)
         webViewConfiguration.userContentController.add(scriptBridge, name: "vimzen")
@@ -71,6 +82,30 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
         self.scriptBridge.tab = self
         self.webView.navigationDelegate = self
         setupObservers()
+
+        if webView.responds(to: Selector(("_isPlayingAudio"))) {
+            webView.addObserver(self, forKeyPath: "_isPlayingAudio", options: [.new], context: nil)
+        }
+    }
+
+    deinit {
+        webView.removeObserver(self, forKeyPath: "_isPlayingAudio")
+    }
+
+    public override func observeValue(
+        forKeyPath keyPath: String?,
+        of object: Any?,
+        change: [NSKeyValueChangeKey : Any]?,
+        context: UnsafeMutableRawPointer?
+    ) {
+        if keyPath == "_isPlayingAudio" {
+            let playing = (webView.value(forKey: "_isPlayingAudio") as? Bool) ?? false
+            Task { @MainActor in
+                self.setAudibleState(playing)
+            }
+        } else {
+            super.observeValue(forKeyPath: keyPath, of: object, change: change, context: context)
+        }
     }
 
     private func setupObservers() {
@@ -151,7 +186,80 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
         decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy, WKWebpagePreferences) -> Void
     ) {
         preferences.allowsContentJavaScript = self.isJavaScriptEnabled
+
+        if navigationAction.shouldPerformDownload {
+            decisionHandler(.download, preferences)
+            return
+        }
+
+        // Check for plaintext HTTP navigation
+        if let targetURL = navigationAction.request.url,
+           targetURL.scheme?.lowercased() == "http",
+           targetURL.host?.lowercased() != "localhost",
+           targetURL.host != "127.0.0.1",
+           !bypassInsecureWarningURLs.contains(targetURL) {
+            decisionHandler(.cancel, preferences)
+            Task { @MainActor in
+                let allow = await PluginRegistry.shared.confirm(
+                    prompt: "INSECURE",
+                    promptIcon: "exclamationmark.triangle.fill",
+                    message: "Connection to \(targetURL.host ?? "") is unencrypted (HTTP). Proceed?",
+                    defaultYes: false
+                )
+                if allow {
+                    self.bypassInsecureWarningURLs.insert(targetURL)
+                    self.load(url: targetURL)
+                }
+            }
+            return
+        }
+
         decisionHandler(.allow, preferences)
+    }
+
+    public func webView(
+        _ webView: WKWebView,
+        decidePolicyFor navigationResponse: WKNavigationResponse,
+        decisionHandler: @escaping @MainActor @Sendable (WKNavigationResponsePolicy) -> Void
+    ) {
+        if navigationResponse.canShowMIMEType {
+            decisionHandler(.allow)
+            return
+        }
+
+        let filename = navigationResponse.response.suggestedFilename ?? "download"
+        let length = navigationResponse.response.expectedContentLength
+        let sizeInfo = length > 0 ? " (\(ByteCountFormatter.string(fromByteCount: length, countStyle: .file)))" : ""
+
+        Task { @MainActor in
+            let allow = await PluginRegistry.shared.confirm(
+                prompt: "DOWNLOAD",
+                promptIcon: "arrow.down.circle.fill",
+                message: "Download \(filename)\(sizeInfo)?",
+                defaultYes: true
+            )
+            if allow {
+                decisionHandler(.download)
+            } else {
+                decisionHandler(.cancel)
+            }
+        }
+    }
+
+    public func webView(
+        _ webView: WKWebView,
+        navigationResponse: WKNavigationResponse,
+        didBecome download: WKDownload
+    ) {
+        DownloadManager.shared.track(download, suggestedFilename: navigationResponse.response.suggestedFilename ?? "download")
+    }
+
+    public func webView(
+        _ webView: WKWebView,
+        navigationAction: WKNavigationAction,
+        didBecome download: WKDownload
+    ) {
+        DownloadManager.shared.track(download, suggestedFilename: download.originalRequest?.url?.lastPathComponent ?? "download")
     }
 
     public func webView(
@@ -229,6 +337,10 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
         customTopColor = nil
         detectedTopColor = nil
         topColor = nil
+        isMuted = false
+        isAudible = false
+        isPlayingMedia = false
+
         let request = URLRequest(url: url)
         webView.load(request)
     }
@@ -256,6 +368,9 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
         url = URL(string: "vimzen://newtab")
         customTopColor = nil
         detectedTopColor = nil
+        isMuted = false
+        isAudible = false
+        isPlayingMedia = false
         updateEffectiveTopColor()
         let savedNotes = ScratchpadStore.loadNotes(for: profileId)
         webView.loadHTMLString(NewTabTemplate.html(initialNotes: savedNotes), baseURL: URL(string: "vimzen://newtab"))
@@ -359,6 +474,183 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
         }
     }
 
+    // MARK: - Find in Page (Vim / Search)
+
+    public func findInPage(
+        _ query: String,
+        forward: Bool = true,
+        notifyIfNotFound: Bool = false,
+        onCountUpdated: (@MainActor (Int, Int) -> Void)? = nil
+    ) {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            currentSearchIndex = 0
+            totalSearchMatches = 0
+            onCountUpdated?(0, 0)
+            return
+        }
+
+        let isNewPattern = (trimmed.lowercased() != lastSearchQuery.lowercased())
+        lastSearchQuery = trimmed
+
+        let config = WKFindConfiguration()
+        config.backwards = !forward
+        config.wraps = true
+        config.caseSensitive = false
+
+        webView.find(trimmed, configuration: config) { [weak self] result in
+            guard let self = self else { return }
+            if !result.matchFound {
+                self.currentSearchIndex = 0
+                self.totalSearchMatches = 0
+                onCountUpdated?(0, 0)
+                if notifyIfNotFound {
+                    PluginRegistry.shared.showToast(
+                        NotificationToast(message: "Pattern not found: \(trimmed)", duration: 1.5)
+                    )
+                }
+            } else {
+                if isNewPattern {
+                    self.countMatchesInDOM(trimmed) { [weak self] total in
+                        guard let self = self else { return }
+                        self.totalSearchMatches = total
+                        self.currentSearchIndex = total > 0 ? 1 : 0
+                        onCountUpdated?(self.currentSearchIndex, self.totalSearchMatches)
+                    }
+                } else {
+                    if self.totalSearchMatches > 0 {
+                        if forward {
+                            self.currentSearchIndex = (self.currentSearchIndex % self.totalSearchMatches) + 1
+                        } else {
+                            self.currentSearchIndex = ((self.currentSearchIndex - 2 + self.totalSearchMatches) % self.totalSearchMatches) + 1
+                        }
+                    }
+                    onCountUpdated?(self.currentSearchIndex, self.totalSearchMatches)
+                }
+            }
+        }
+    }
+
+    private func countMatchesInDOM(_ query: String, completion: @escaping @MainActor (Int) -> Void) {
+        let escaped = query
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "'", with: "\\'")
+            .replacingOccurrences(of: "\n", with: " ")
+        let script = """
+        (function() {
+            try {
+                if (!document.body) return 0;
+                var text = document.body.innerText || "";
+                var re = new RegExp('\(escaped)', 'gi');
+                var m = text.match(re);
+                return m ? m.length : 0;
+            } catch(e) {
+                return 0;
+            }
+        })();
+        """
+        webView.evaluateJavaScript(script) { result, _ in
+            let count = (result as? Int) ?? (result as? NSNumber)?.intValue ?? 0
+            Task { @MainActor in
+                completion(count)
+            }
+        }
+    }
+
+    public func findNext(count: Int = 1) {
+        guard !lastSearchQuery.isEmpty else {
+            PluginRegistry.shared.showToast(
+                NotificationToast(message: "No previous search pattern (press / to search)", duration: 2.0)
+            )
+            return
+        }
+        for _ in 0..<max(1, count) {
+            findInPage(lastSearchQuery, forward: true, notifyIfNotFound: true) { [weak self] current, total in
+                guard let self = self else { return }
+                if total > 0 {
+                    PluginRegistry.shared.showToast(
+                        NotificationToast(message: "[\(current)/\(total)]  /\(self.lastSearchQuery)", duration: 1.5)
+                    )
+                }
+            }
+        }
+    }
+
+    public func findPrevious(count: Int = 1) {
+        guard !lastSearchQuery.isEmpty else {
+            PluginRegistry.shared.showToast(
+                NotificationToast(message: "No previous search pattern (press / to search)", duration: 2.0)
+            )
+            return
+        }
+        for _ in 0..<max(1, count) {
+            findInPage(lastSearchQuery, forward: false, notifyIfNotFound: true) { [weak self] current, total in
+                guard let self = self else { return }
+                if total > 0 {
+                    PluginRegistry.shared.showToast(
+                        NotificationToast(message: "[\(current)/\(total)]  /\(self.lastSearchQuery)", duration: 1.5)
+                    )
+                }
+            }
+        }
+    }
+
+    public func clearFindMatches() {
+        webView.evaluateJavaScript("window.getSelection()?.removeAllRanges();", completionHandler: nil)
+    }
+
+    public func updateMediaState(isAudible: Bool, isPlaying: Bool, isMuted: Bool, mediaKind: String) {
+        self.mediaKind = mediaKind
+        setAudibleState(isAudible || isPlaying)
+    }
+
+    public func setAudibleState(_ active: Bool) {
+        if active {
+            silenceDebounceTask?.cancel()
+            silenceDebounceTask = nil
+            if isMuted {
+                isMuted = false
+            }
+            if !self.isAudible {
+                self.isAudible = true
+                self.isPlayingMedia = true
+            }
+            self.lastAudibleAt = Date()
+        } else {
+            // Apply 1.2s silence hold timer to absorb buffer transitions and prevent flickering
+            if self.isAudible && silenceDebounceTask == nil {
+                silenceDebounceTask = Task { @MainActor [weak self] in
+                    try? await Task.sleep(nanoseconds: 1_200_000_000)
+                    guard !Task.isCancelled, let self = self else { return }
+                    self.isAudible = false
+                    self.isPlayingMedia = false
+                    self.silenceDebounceTask = nil
+                }
+            }
+        }
+    }
+
+    public func toggleMute(enable: Bool? = nil) {
+        let targetMute = enable ?? !isMuted
+        isMuted = targetMute
+        if targetMute {
+            silenceDebounceTask?.cancel()
+            silenceDebounceTask = nil
+            isAudible = false
+            isPlayingMedia = false
+        }
+
+        // 1. Try native WebKit muting SPI
+        let sel = Selector(("_setAllMediaMuted:"))
+        if webView.responds(to: sel) {
+            _ = webView.perform(sel, with: NSNumber(value: targetMute))
+        }
+
+        // 2. Also run DOM & Web Audio JS muting
+        let script = "if (window.vimzenMuteMedia) { window.vimzenMuteMedia(\(targetMute)); }"
+        webView.evaluateJavaScript(script, completionHandler: nil)
+    }
+
     public func toggleJavaScript(enable: Bool? = nil) {
         if let enable = enable {
             isJavaScriptEnabled = enable
@@ -396,5 +688,27 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
         }
 
         return details.joined(separator: " · ")
+    }
+
+    public func exportPDF() async throws -> URL {
+        let pdfData = try await webView.pdf()
+        let downloadsDir = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Downloads", isDirectory: true)
+
+        let rawTitle = (title.isEmpty ? (url?.host ?? "Document") : title)
+        let safeTitle = rawTitle.replacingOccurrences(of: "[^a-zA-Z0-9._-]", with: "_", options: .regularExpression)
+        let filename = safeTitle.isEmpty ? "Page.pdf" : "\(safeTitle).pdf"
+
+        var targetURL = downloadsDir.appendingPathComponent(filename)
+        let fm = FileManager.default
+        let baseName = (filename as NSString).deletingPathExtension
+        var index = 1
+        while fm.fileExists(atPath: targetURL.path) {
+            targetURL = downloadsDir.appendingPathComponent("\(baseName) (\(index)).pdf")
+            index += 1
+        }
+
+        try pdfData.write(to: targetURL)
+        return targetURL
     }
 }

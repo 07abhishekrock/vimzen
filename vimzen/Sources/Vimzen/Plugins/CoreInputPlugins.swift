@@ -224,6 +224,17 @@ public final class CommandInputPlugin: InputPlugin {
                 HistoryStore.shared.clear(profileId: activeProf.id, scope: .all)
                 PluginRegistry.shared.showToast(NotificationToast(message: "Cleared all history (\(activeProf.name))", duration: 2.0))
             }
+        case ":mute", "mute", ":m", "m":
+            mainVC.tabManager.toggleActiveTabMute()
+        case ":unmute", "unmute":
+            mainVC.tabManager.activeTab?.toggleMute(enable: false)
+            PluginRegistry.shared.showToast(NotificationToast(message: "Unmuted: \(mainVC.tabManager.activeTab?.title ?? "Tab")", duration: 2.0))
+        case ":muteall", ":mute all", "muteall", "mute all":
+            mainVC.tabManager.toggleMuteAllAudibleTabs()
+        case ":unmuteall", ":unmute all", "unmuteall", "unmute all":
+            let muted = mainVC.tabManager.tabs.filter { $0.isMuted }
+            for t in muted { t.toggleMute(enable: false) }
+            PluginRegistry.shared.showToast(NotificationToast(message: "Unmuted all tabs", duration: 2.0))
         case _ where cmd.starts(with: ":clearcookie") || cmd.starts(with: "clearcookie"):
             var arg = cmd.replacingOccurrences(of: "^:?clearcookies?\\s*", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
             if arg.starts(with: "--domain ") {
@@ -269,6 +280,26 @@ public final class CommandInputPlugin: InputPlugin {
             mainVC.tabManager.activeTab?.reload()
             let count = UserScriptManager.shared.loadScripts().count
             PluginRegistry.shared.showToast(NotificationToast(message: "Reloaded \(count) userscript(s)", duration: 2.0))
+        case ":printpdf", "printpdf", ":pdf", "pdf":
+            guard let activeTab = mainVC.tabManager.activeTab else { break }
+            Task { @MainActor in
+                do {
+                    let pdfURL = try await activeTab.exportPDF()
+                    PluginRegistry.shared.showToast(
+                        NotificationToast(
+                            message: "Saved PDF: \(pdfURL.lastPathComponent)",
+                            duration: 2.0
+                        )
+                    )
+                } catch {
+                    PluginRegistry.shared.showToast(
+                        NotificationToast(
+                            message: "Failed to generate PDF",
+                            duration: 2.0
+                        )
+                    )
+                }
+            }
         case _ where cmd.starts(with: ":tabnew ") || cmd.starts(with: "tabnew ") || cmd.starts(with: ":t ") || cmd.starts(with: "t "):
             let urlPart = cmd.replacingOccurrences(of: "^:?(tabnew|t)\\s+", with: "", options: .regularExpression)
             OpenNewTabInputPlugin(tabManager: mainVC.tabManager).onSubmit(input: urlPart, controller: controller)
@@ -532,6 +563,39 @@ public final class HistoryPickerInputPlugin: InputPlugin {
         } else {
             let encoded = input.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? input
             return URL(string: "https://www.google.com/search?q=\(encoded)")!
+        }
+    }
+}
+
+// MARK: - Find in Page Input Plugin (Vim /)
+
+@MainActor
+public final class FindInputPlugin: InputPlugin {
+    public let id = "input.find"
+    public let prompt = "/"
+    public let promptIconName: String? = "magnifyingglass"
+    public let commandAliases = ["/"]
+    public let placeholder = "Find in page..."
+    public let isComboboxEnabled: Bool = false
+
+    private weak var tabManager: TabManager?
+
+    public init(tabManager: TabManager? = nil) {
+        self.tabManager = tabManager
+    }
+
+    public func onSubmit(input: String, controller: AnyObject?) {
+        guard let mainVC = controller as? MainViewController else { return }
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        mainVC.tabManager.activeTab?.findInPage(trimmed, forward: true, notifyIfNotFound: true)
+    }
+
+    public func onCancel(controller: AnyObject?) {
+        guard let mainVC = controller as? MainViewController else { return }
+        if let activeWebView = mainVC.tabManager.activeTab?.webView {
+            mainVC.view.window?.makeFirstResponder(activeWebView)
         }
     }
 }
