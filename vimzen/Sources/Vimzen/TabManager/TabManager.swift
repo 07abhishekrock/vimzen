@@ -5,6 +5,7 @@ import Combine
 public final class TabManager: ObservableObject {
     @Published public private(set) var tabs: [Tab] = []
     @Published public private(set) var activeTabId: UUID?
+    public private(set) var previousActiveTabId: UUID?
 
     public var activeTab: Tab? {
         guard let id = activeTabId else { return nil }
@@ -43,6 +44,9 @@ public final class TabManager: ObservableObject {
 
     public func switchToTab(id: UUID) {
         guard tabs.contains(where: { $0.id == id }) else { return }
+        if activeTabId != id {
+            previousActiveTabId = activeTabId
+        }
         activeTabId = id
 
         for tab in tabs {
@@ -107,6 +111,16 @@ public final class TabManager: ObservableObject {
         host.lowercased().replacingOccurrences(of: "^www\\.", with: "", options: .regularExpression)
     }
 
+    public func switchToLastActiveTab() {
+        guard let prevId = previousActiveTabId,
+              tabs.contains(where: { $0.id == prevId }) else {
+            let toast = NotificationToast(message: "No alternate tab", duration: 2.0)
+            PluginRegistry.shared.showToast(toast)
+            return
+        }
+        switchToTab(id: prevId)
+    }
+
     public func closeActiveTab() {
         guard let activeId = activeTabId else { return }
         closeTab(id: activeId)
@@ -116,6 +130,13 @@ public final class TabManager: ObservableObject {
         guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
         let closingTab = tabs.remove(at: index)
         closingTab.webView.removeFromSuperview()
+
+        if previousActiveTabId == id {
+            // Pick next most recently active tab excluding current active
+            previousActiveTabId = tabs.filter { $0.id != activeTabId }
+                .sorted { $0.lastActiveAt > $1.lastActiveAt }
+                .first?.id
+        }
 
         if activeTabId == id {
             if !tabs.isEmpty {

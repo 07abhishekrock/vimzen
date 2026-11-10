@@ -91,13 +91,21 @@ public final class KeyEngine: ObservableObject {
             guard let base = event.charactersIgnoringModifiers?.lowercased(), !base.isEmpty else {
                 return false
             }
-            chord = "<C-\(base)>"
+            if event.keyCode == 48 {
+                chord = "<C-Tab>"
+            } else {
+                chord = "<C-\(base)>"
+            }
         } else {
             // Use event.characters so Shift produces uppercase 'H', 'L', 'G', 'O', 'R'
             guard let chars = event.characters, !chars.isEmpty else {
                 return false
             }
-            chord = chars
+            if event.keyCode == 48 {
+                chord = "<Tab>"
+            } else {
+                chord = chars
+            }
         }
 
         // Check interactive undo toast action hook (e.g. 'u' within 4s restores closed tab)
@@ -213,6 +221,10 @@ public final class KeyEngine: ObservableObject {
             return true
         case "gD":
             tabManager.previousSameDomainTab(count: count)
+            clearBuffer()
+            return true
+        case "<C-6>", "<C-^>", "g<Tab>", "<C-Tab>":
+            tabManager.switchToLastActiveTab()
             clearBuffer()
             return true
         case "x", ":q":

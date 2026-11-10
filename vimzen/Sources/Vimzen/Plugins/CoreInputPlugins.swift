@@ -160,6 +160,8 @@ public final class CommandInputPlugin: InputPlugin {
             mainVC.tabManager.activeTab?.reload()
         case ":tabnew", "tabnew", ":t", "t":
             mainVC.tabManager.createTab(url: nil, activate: true)
+        case ":b#", "b#", ":b #", "b #":
+            mainVC.tabManager.switchToLastActiveTab()
         case ":b", "b", ":tabs", "tabs", ":buffers", "buffers":
             mainVC.keyEngine.onTriggerInputPlugin?("input.tab-picker")
         case _ where cmd.starts(with: ":tabnew ") || cmd.starts(with: "tabnew ") || cmd.starts(with: ":t ") || cmd.starts(with: "t "):
