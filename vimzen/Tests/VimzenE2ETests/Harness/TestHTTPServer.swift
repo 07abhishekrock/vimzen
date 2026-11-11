@@ -314,5 +314,14 @@ extension TestHTTPServer {
             <script>document.getElementById('jsstate').textContent = 'js-on-marker'</script>
             """)
         }
+        // Custom-scheme fixture: vimzene2e-test:// is deliberately unregistered,
+        // so accepting the open-external confirm never launches a real app
+        route("/external-links") { _ in
+            .html(title: "External Links", """
+            <p>external-links-marker</p>
+            <a href="vimzene2e-test://open?id=42">ext-link</a>
+            <a href="vimzene2e-test://open?id=43" target="_blank">ext-blank-link</a>
+            """)
+        }
     }
 }

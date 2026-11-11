@@ -45,7 +45,41 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
     private var silenceDebounceTask: Task<Void, Never>?
     private var bypassInsecureWarningURLs = Set<URL>()
     private var popupConfirmPending = false
+    private var externalOpenConfirmPending = false
     private let scriptBridge = VimzenScriptBridge()
+
+    /// Schemes WKWebView can load itself. Anything else (selfservicecapability://,
+    /// mailto:, slack://, …) is handed to LaunchServices after a confirmation.
+    private static let loadableSchemes: Set<String> = ["http", "https", "about", "data", "blob", "file", "javascript", "vimzen"]
+
+    private func isExternalScheme(_ url: URL) -> Bool {
+        guard let scheme = url.scheme?.lowercased(), !scheme.isEmpty else { return false }
+        return !Self.loadableSchemes.contains(scheme)
+    }
+
+    /// Confirms, then opens a custom-scheme URL in its registered handler app.
+    /// One pending confirm per tab; while active, further triggers are dropped.
+    private func promptToOpenExternally(_ url: URL) {
+        if externalOpenConfirmPending { return }
+        externalOpenConfirmPending = true
+        let display = url.absoluteString.count > 100 ? String(url.absoluteString.prefix(100)) + "…" : url.absoluteString
+        Task { @MainActor in
+            let allow = await PluginRegistry.shared.confirm(
+                prompt: "OPEN EXTERNAL",
+                promptIcon: "arrow.up.forward.app.fill",
+                message: "Open \"\(display)\" in an external app?",
+                defaultYes: true
+            )
+            self.externalOpenConfirmPending = false
+            guard allow else { return }
+            NSWorkspace.shared.open(url, configuration: .init()) { _, error in
+                if error != nil {
+                    let scheme = url.scheme ?? "?"
+                    PluginRegistry.shared.showToast(NotificationToast(message: "No app found to open \(scheme):// links", duration: 3.0))
+                }
+            }
+        }
+    }
 
     public func markActive() {
         lastActiveAt = Date()
@@ -216,6 +250,14 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
 
         if navigationAction.shouldPerformDownload {
             decisionHandler(.download, preferences)
+            return
+        }
+
+        // Custom-scheme links (selfservicecapability://, mailto:, …) can't be
+        // loaded by WKWebView — cancel and offer to open in the handler app
+        if let targetURL = navigationAction.request.url, isExternalScheme(targetURL) {
+            decisionHandler(.cancel, preferences)
+            promptToOpenExternally(targetURL)
             return
         }
 
@@ -864,6 +906,13 @@ extension Tab: WKUIDelegate {
         windowFeatures: WKWindowFeatures
     ) -> WKWebView? {
         guard let url = navigationAction.request.url else { return nil }
+
+        // External-scheme popups go straight to the open-in-app confirm; the tab
+        // we would have created could never load the URL anyway
+        if isExternalScheme(url) {
+            promptToOpenExternally(url)
+            return nil
+        }
 
         // Domains marked popupsRequireConfirmation get a y/N gate keyed off the
         // *source* page's host; while one confirm is pending further popups from
