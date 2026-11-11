@@ -112,4 +112,20 @@ final class NavigationTests: E2ETestCase {
 
         assertText("typed:ab", timeout: 10)
     }
+
+    /// Regression: WKWebView's default UA lacks the Safari token, which makes
+    /// UA-sniffing sites (Google et al.) serve legacy pages. We append it.
+    func testUserAgentIdentifiesAsSafari() {
+        app.openInCurrentTab("\(server.baseURL)/alpha")
+        assertText("Alpha Page")
+
+        let requests = server.requests(to: "/alpha")
+        guard let ua = requests.last?.headers["user-agent"] else {
+            XCTFail("no /alpha request logged with a User-Agent header")
+            return
+        }
+        XCTAssertTrue(ua.contains("Version/"), "UA missing Version token: \(ua)")
+        XCTAssertTrue(ua.contains("Safari/605.1.15"), "UA missing Safari token: \(ua)")
+        XCTAssertTrue(ua.contains("AppleWebKit/605.1.15"), "UA missing WebKit token: \(ua)")
+    }
 }

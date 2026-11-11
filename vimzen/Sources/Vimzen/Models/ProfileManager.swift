@@ -52,6 +52,11 @@ public final class ProfileManager: ObservableObject {
     public func configuration(for profile: Profile) -> WKWebViewConfiguration {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = dataStore(for: profile)
+        // WKWebView's default UA omits the "Version/x Safari/605.1.15" suffix, so
+        // UA-sniffing sites (Google et al.) treat the browser as unsupported and
+        // serve legacy pages. Appending the same token Safari sends — versioned
+        // from the installed Safari — makes the UA truthfully identify as WebKit.
+        config.applicationNameForUserAgent = "Version/\(Self.safariVersion) Safari/605.1.15"
         config.allowsAirPlayForMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = .all
         let preferences = WKWebpagePreferences()
@@ -59,6 +64,15 @@ public final class ProfileManager: ObservableObject {
         config.defaultWebpagePreferences = preferences
         return config
     }
+
+    /// Version of the installed Safari (e.g. "26.6.2") for the UA suffix.
+    /// WebKit exposes no public version API; Safari's bundle is always present on
+    /// macOS and tracks the WebKit engine version we actually run.
+    private static let safariVersion: String = {
+        let version = Bundle(path: "/Applications/Safari.app")?
+            .infoDictionary?["CFBundleShortVersionString"] as? String
+        return version ?? "26.0"
+    }()
 
     @discardableResult
     public func createProfile(name: String, badge: String? = nil, isEphemeral: Bool = false) -> Profile {
