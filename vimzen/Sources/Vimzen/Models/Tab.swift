@@ -30,6 +30,11 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
     public private(set) var currentServerTrust: SecTrust?
     public private(set) var isNewTabScratchpad: Bool = false
     public private(set) var lastActiveAt: Date = Date()
+    public private(set) var failedURL: URL? = nil
+    private var provisionalTargetURL: URL? = nil
+    /// Set only by load(url:) — never touched by delegate callbacks, so provisional
+    /// failures can always be attributed even if webView.url still shows the old page.
+    private var lastRequestedURL: URL? = nil
 
     private var customTopColor: NSColor? = nil
     private var detectedTopColor: NSColor? = nil
@@ -149,9 +154,12 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
             .receive(on: RunLoop.main)
             .sink { [weak self] newURL in
                 guard let self = self else { return }
-                self.url = newURL
-                if self.title.isEmpty, let host = newURL?.host {
-                    self.title = host
+                // Keep the failed URL pinned in the UI while the error page is displayed
+                if self.failedURL == nil {
+                    self.url = newURL
+                    if self.title.isEmpty, let host = newURL?.host {
+                        self.title = host
+                    }
                 }
                 self.deriveFaviconURL(for: newURL)
                 self.extractTopColor()
@@ -233,6 +241,17 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
         decidePolicyFor navigationResponse: WKNavigationResponse,
         decisionHandler: @escaping @MainActor @Sendable (WKNavigationResponsePolicy) -> Void
     ) {
+        // Intercept gateway / server errors on the main frame and render the zen error page
+        if navigationResponse.isForMainFrame,
+           let http = navigationResponse.response as? HTTPURLResponse,
+           (500...599).contains(http.statusCode),
+           let failed = http.url {
+            decisionHandler(.cancel)
+            let content = ErrorPageTemplate.content(forHTTPStatus: http.statusCode)
+            showErrorPage(for: failed, code: content.code, headline: content.headline, message: content.message)
+            return
+        }
+
         if navigationResponse.canShowMIMEType {
             decisionHandler(.allow)
             return
@@ -287,6 +306,7 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
 
     public func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
         self.isLoading = true
+        self.provisionalTargetURL = webView.url
         if let host = webView.url?.host {
             if self.title.isEmpty {
                 self.title = host
@@ -298,7 +318,9 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
         if let newTitle = webView.title, !newTitle.isEmpty {
             self.title = newTitle
         }
-        self.url = webView.url
+        if failedURL == nil {
+            self.url = webView.url
+        }
     }
 
     public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -325,10 +347,51 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
 
     public func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
         self.isLoading = false
+        handleLoadFailure(error as NSError)
     }
 
     public func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
         self.isLoading = false
+        handleLoadFailure(error as NSError)
+    }
+
+    /// Renders the zen error fallback page for main-frame load failures.
+    /// Cancels (-999) and subframe/resource failures are ignored.
+    private func handleLoadFailure(_ error: NSError) {
+        if error.code == NSURLErrorCancelled { return }
+        // Policy-change interruptions fire after our own .cancel decisions (5xx error
+        // page, download conversion) — the error page is already rendered by then
+        if error.domain == "WebKitErrorDomain" && error.code == 102 { return }
+
+        let failingURL = error.userInfo[NSURLErrorFailingURLErrorKey] as? URL
+
+        let isMainFrame = failingURL == nil
+            || failingURL == lastRequestedURL
+            || failingURL == provisionalTargetURL
+            || failingURL == webView.url
+            || failingURL == self.url
+        guard isMainFrame, let target = failingURL ?? self.url else { return }
+        guard target.scheme?.lowercased() != "vimzen" else { return }
+
+        let content = ErrorPageTemplate.content(forError: error)
+        showErrorPage(for: target, code: content.code, headline: content.headline, message: content.message)
+    }
+
+    private func showErrorPage(for failed: URL, code: String, headline: String, message: String) {
+        self.failedURL = failed
+        isNewTabScratchpad = false
+        customTopColor = nil
+        detectedTopColor = nil
+        isMuted = false
+        isAudible = false
+        isPlayingMedia = false
+        title = "\(code) · \(headline)"
+        url = failed
+        topColor = NSColor(calibratedRed: 0.07, green: 0.07, blue: 0.08, alpha: 1.0)
+        webView.loadHTMLString(
+            ErrorPageTemplate.html(code: code, headline: headline, message: message, failedURL: failed),
+            baseURL: failed
+        )
     }
 
     // MARK: - Navigation & Actions
@@ -344,6 +407,7 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
     }
 
     public func load(url: URL) {
+        failedURL = nil
         if url.scheme?.lowercased() == "vimzen" {
             if url.host?.lowercased() == "help" {
                 loadHelpTemplate()
@@ -362,12 +426,18 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
         isAudible = false
         isPlayingMedia = false
 
+        // Pin the intended target so provisional failures (e.g. connection refused)
+        // can be attributed to the main frame even if webView.url hasn't updated yet
+        provisionalTargetURL = url
+        lastRequestedURL = url
+
         let request = URLRequest(url: url)
         webView.load(request)
     }
 
     public func loadHelpTemplate() {
         isNewTabScratchpad = false
+        failedURL = nil
         title = "Vimzen Help"
         url = URL(string: "vimzen://help")
         customTopColor = nil
@@ -398,6 +468,7 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
 
     public func loadNewTabTemplate() {
         isNewTabScratchpad = true
+        failedURL = nil
         title = "New Tab"
         url = URL(string: "vimzen://newtab")
         customTopColor = nil
@@ -469,11 +540,20 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
     }
 
     public func reload() {
-        webView.reload()
+        // Re-attempt the original URL when the error fallback page is displayed
+        if let failed = failedURL {
+            load(url: failed)
+        } else {
+            webView.reload()
+        }
     }
 
     public func reloadFromOrigin() {
-        webView.reloadFromOrigin()
+        if let failed = failedURL {
+            load(url: failed)
+        } else {
+            webView.reloadFromOrigin()
+        }
     }
 
     public func goBack(count: Int = 1) {
