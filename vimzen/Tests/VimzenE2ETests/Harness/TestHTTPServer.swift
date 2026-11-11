@@ -290,5 +290,20 @@ extension TestHTTPServer {
         route("/pdfpage") { _ in
             .html(title: "E2EPDFPAGE", "<p>pdf-marker</p>")
         }
+        route("/popup") { _ in
+            .html(title: "Popup Page", """
+            <p>popup-opener-marker</p>
+            <button onclick="window.open('/popup-target', '_blank', 'width=640,height=480')">window-open-btn</button>
+            <a href="/popup-target" target="_blank">blank-link</a>
+            <a href="/popup-target">plain-link</a>
+            <button onclick="alert('e2e-alert-msg')">alert-btn</button>
+            <button onclick="document.getElementById('r').textContent='confirm:'+confirm('e2e-confirm-msg')">confirm-btn</button>
+            <button onclick="document.getElementById('r').textContent='prompt:'+prompt('e2e-prompt-msg','')">prompt-btn</button>
+            <p id="r">result-idle</p>
+            """)
+        }
+        route("/popup-target") { _ in
+            .html(title: "Popup Target", "<p>popup-target-marker</p>")
+        }
     }
 }

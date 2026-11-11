@@ -9,6 +9,10 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
     public let profileId: UUID
     public let webView: WKWebView
 
+    /// Back-reference for WKUIDelegate flows (popups, window.close) that must
+    /// create or close tabs. Set by TabManager immediately after init.
+    public weak var tabManager: TabManager?
+
     @Published public var title: String = ""
     @Published public var url: URL?
     @Published public var faviconURL: URL?
@@ -97,6 +101,7 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
 
         self.scriptBridge.tab = self
         self.webView.navigationDelegate = self
+        self.webView.uiDelegate = self
         setupObservers()
 
         if webView.responds(to: Selector(("_isPlayingAudio"))) {
@@ -824,5 +829,89 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
 
         try pdfData.write(to: targetURL)
         return targetURL
+    }
+}
+
+// MARK: - WKUIDelegate (popups & JavaScript dialogs)
+
+extension Tab: WKUIDelegate {
+
+    /// window.open() and target="_blank" both funnel here. Without this method
+    /// WKWebView silently drops them. Popups open as regular tabs — keyboard-first
+    /// browsers have no separate popup windows — and the new tab loads the URL
+    /// itself, so we return nil (no WebKit-created web view).
+    public func webView(
+        _ webView: WKWebView,
+        createWebViewWith configuration: WKWebViewConfiguration,
+        for navigationAction: WKNavigationAction,
+        windowFeatures: WKWindowFeatures
+    ) -> WKWebView? {
+        guard let url = navigationAction.request.url else { return nil }
+        tabManager?.createTab(url: url, activate: true)
+        return nil
+    }
+
+    /// window.close() from a script-opened page closes its tab.
+    public func webViewDidClose(_ webView: WKWebView) {
+        tabManager?.closeTab(id: id)
+    }
+
+    public func webView(
+        _ webView: WKWebView,
+        runJavaScriptAlertPanelWithMessage message: String,
+        initiatedByFrame frame: WKFrameInfo,
+        completionHandler: @escaping @MainActor @Sendable () -> Void
+    ) {
+        let alert = makeDialogAlert(message: message, webView: webView)
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+        completionHandler()
+    }
+
+    public func webView(
+        _ webView: WKWebView,
+        runJavaScriptConfirmPanelWithMessage message: String,
+        initiatedByFrame frame: WKFrameInfo,
+        completionHandler: @escaping @MainActor @Sendable (Bool) -> Void
+    ) {
+        let alert = makeDialogAlert(message: message, webView: webView)
+        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: "Cancel")
+        alert.buttons.last?.keyEquivalent = "\u{1b}" // Escape = Cancel
+        completionHandler(alert.runModal() == .alertFirstButtonReturn)
+    }
+
+    public func webView(
+        _ webView: WKWebView,
+        runJavaScriptTextInputPanelWithPrompt prompt: String,
+        defaultText: String?,
+        initiatedByFrame frame: WKFrameInfo,
+        completionHandler: @escaping @MainActor @Sendable (String?) -> Void
+    ) {
+        let alert = makeDialogAlert(message: prompt, webView: webView)
+        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: "Cancel")
+        alert.buttons.last?.keyEquivalent = "\u{1b}" // Escape = Cancel
+
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
+        field.stringValue = defaultText ?? ""
+        alert.accessoryView = field
+        alert.layout()
+        alert.window.makeFirstResponder(field)
+
+        let accepted = alert.runModal() == .alertFirstButtonReturn
+        completionHandler(accepted ? field.stringValue : nil)
+    }
+
+    /// Consistent, minimal JS dialog chrome; the origin host is shown as context
+    /// so the page text can't impersonate a system message.
+    private func makeDialogAlert(message: String, webView: WKWebView) -> NSAlert {
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = message
+        if let host = webView.url?.host, !host.isEmpty {
+            alert.informativeText = host
+        }
+        return alert
     }
 }

@@ -126,6 +126,44 @@ final class VimzenDriver {
         }
     }
 
+    /// Clicks a web-content button/link (located via the AX tree by label) at its
+    /// center using CGEvent. Returns false when no matching element is on screen.
+    @discardableResult
+    func clickWebElement(_ title: String) -> Bool {
+        guard let frame = AXTree.clickableFrame(pid: pid, titled: title) else { return false }
+        postMouseClick(at: CGPoint(x: frame.midX, y: frame.midY), clickState: 1)
+        return true
+    }
+
+    /// Right-clicks a web-content link/button to open its context menu.
+    /// Pair with pressContextMenuItem to choose an item.
+    @discardableResult
+    func rightClickWebElement(_ title: String) -> Bool {
+        guard let frame = AXTree.clickableFrame(pid: pid, titled: title) else { return false }
+        let point = CGPoint(x: frame.midX, y: frame.midY)
+        let move = CGEvent(mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .right)
+        move?.post(tap: .cghidEventTap)
+        usleep(100_000)
+        let down = CGEvent(mouseEventSource: nil, mouseType: .rightMouseDown, mouseCursorPosition: point, mouseButton: .right)
+        down?.post(tap: .cghidEventTap)
+        usleep(60_000)
+        let up = CGEvent(mouseEventSource: nil, mouseType: .rightMouseUp, mouseCursorPosition: point, mouseButton: .right)
+        up?.post(tap: .cghidEventTap)
+        return true
+    }
+
+    /// Presses an item of the currently open context menu (exact title match),
+    /// polling briefly for the menu to appear. Returns false if it never shows.
+    @discardableResult
+    func pressContextMenuItem(_ title: String, timeout: TimeInterval = 5) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if AXTree.pressMenuItem(pid: pid, titled: title) { return true }
+            usleep(150_000)
+        }
+        return false
+    }
+
     private func postMouseClick(at point: CGPoint, clickState: Int64) {
         let move = CGEvent(mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left)
         move?.post(tap: .cghidEventTap)

@@ -33,6 +33,7 @@ public final class TabManager: ObservableObject {
         let targetProfile = profile ?? ProfileManager.shared.activeProfile
         let config = ProfileManager.shared.configuration(for: targetProfile)
         let tab = Tab(profileId: targetProfile.id, webViewConfiguration: config)
+        tab.tabManager = self
         tabs.append(tab)
 
         // Add webview to container
