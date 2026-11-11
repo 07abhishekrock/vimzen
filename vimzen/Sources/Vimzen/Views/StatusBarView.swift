@@ -400,6 +400,7 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
         }
 
         if plugin.isComboboxEnabled {
+            combobox?.isInteractive = plugin.isComboboxInteractive
             runComboboxQuery(inputTextField.stringValue, debounce: false)
         } else {
             combobox?.hide()

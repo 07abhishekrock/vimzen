@@ -128,6 +128,9 @@ public final class ComboboxRowView: NSView {
 @MainActor
 public final class ComboboxView: NSView {
     public var onCommitSelection: ((RankedResult) -> Void)?
+    /// Read-only hint mode (command bar): rows render but can't be clicked or
+    /// cycled, so selectedItem stays nil and submission uses the raw typed text.
+    public var isInteractive = true
 
     private let stackView = NSStackView()
     private var rowViews: [ComboboxRowView] = []
@@ -198,10 +201,12 @@ public final class ComboboxView: NSView {
             rowView.isSelected = false
             rowView.translatesAutoresizingMaskIntoConstraints = false
 
-            rowView.onSelect = { [weak self] in
-                self?.selectedIndex = index
-                self?.updateSelectionUI()
-                self?.onCommitSelection?(item)
+            if isInteractive {
+                rowView.onSelect = { [weak self] in
+                    self?.selectedIndex = index
+                    self?.updateSelectionUI()
+                    self?.onCommitSelection?(item)
+                }
             }
 
             stackView.addArrangedSubview(rowView)
@@ -254,7 +259,7 @@ public final class ComboboxView: NSView {
     }
 
     public func moveSelection(by delta: Int) {
-        guard !rowViews.isEmpty else { return }
+        guard isInteractive, !rowViews.isEmpty else { return }
 
         if let current = selectedIndex {
             let next = current + delta

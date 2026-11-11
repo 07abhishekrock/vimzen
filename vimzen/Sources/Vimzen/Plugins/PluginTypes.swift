@@ -56,6 +56,9 @@ public protocol InputPlugin: AnyObject {
     var commandAliases: [String] { get }
     var placeholder: String { get }
     var isComboboxEnabled: Bool { get }
+    /// When false the combobox renders as a read-only hint list: no cycling,
+    /// no Tab-fill, no click-commit — submission is always the raw typed text.
+    var isComboboxInteractive: Bool { get }
     func queryItems(query: String) async -> [RankedResult]
     func queryItemsStreaming(
         query: String,
@@ -68,6 +71,7 @@ public protocol InputPlugin: AnyObject {
 extension InputPlugin {
     public var promptIconName: String? { nil }
     public var isComboboxEnabled: Bool { false }
+    public var isComboboxInteractive: Bool { true }
     public func queryItems(query: String) async -> [RankedResult] { [] }
     public func queryItemsStreaming(
         query: String,

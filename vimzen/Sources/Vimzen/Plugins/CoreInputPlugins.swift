@@ -150,12 +150,52 @@ public final class CommandInputPlugin: InputPlugin {
     public let promptIconName: String? = "command"
     public let commandAliases = [":"]
     public let placeholder = ":q to close, :qa to quit, :r to reload, :open <url>"
+    public let isComboboxEnabled: Bool = true
+    public let isComboboxInteractive: Bool = false
 
     public init() {}
+
+    /// Read-only hint list fed from CommandCatalog. Empty query shows the MRU-5
+    /// (full catalog when nothing recorded yet); typed queries prefix- then
+    /// fuzzy-match. Selection is disabled — Enter always runs the typed text.
+    public func queryItems(query: String) async -> [RankedResult] {
+        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
+        if q.isEmpty {
+            let recents = CommandHistoryStore.shared.recentCommands()
+            let specs = recents.isEmpty
+                ? CommandCatalog.all
+                : recents.compactMap { CommandCatalog.entry(named: $0) }
+            return specs.map { Self.result(for: $0, score: 1.0) }
+        }
+        var scored: [(CommandSpec, Double)] = CommandCatalog.all.compactMap { spec in
+            if spec.name.hasPrefix(q) || spec.aliases.contains(where: { $0.hasPrefix(q) }) {
+                return (spec, 1.0)
+            }
+            let m = PickerRanking.subsequenceMatch(query: q, in: spec.name)
+            return m >= 0 ? (spec, 0.5 + m * 0.5) : nil
+        }
+        scored.sort { $0.1 == $1.1 ? $0.0.name < $1.0.name : $0.1 > $1.1 }
+        return scored.map { Self.result(for: $0.0, score: $0.1) }
+    }
+
+    private static func result(for spec: CommandSpec, score: Double) -> RankedResult {
+        RankedResult(
+            id: "cmd:\(spec.name)",
+            display: spec.name + (spec.argHint.map { " \($0)" } ?? ""),
+            detail: spec.blurb,
+            badge: "CMD",
+            url: nil,
+            score: score
+        )
+    }
 
     public func onSubmit(input: String, controller: AnyObject?) {
         guard let mainVC = controller as? MainViewController else { return }
         let cmd = input.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if let canonical = CommandCatalog.canonicalName(forCommandLine: cmd) {
+            CommandHistoryStore.shared.record(canonical)
+        }
 
         switch cmd {
         case ":q", "q":

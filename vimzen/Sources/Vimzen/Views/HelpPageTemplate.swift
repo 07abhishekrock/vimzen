@@ -172,7 +172,11 @@ public enum HelpPageTemplate {
                         </tr>
                         <tr>
                             <td class="keys"><kbd>:</kbd></td>
-                            <td class="desc">Enter Ex-command line mode</td>
+                            <td class="desc">Enter Ex-command line mode <span class="note">(hint list filters as you type; commands run only when entered in full)</span></td>
+                        </tr>
+                        <tr>
+                            <td class="keys"><kbd>?</kbd></td>
+                            <td class="desc">Open this manual (<code>vimzen://help</code>)</td>
                         </tr>
                         <tr>
                             <td class="keys"><kbd>i</kbd></td>
@@ -209,7 +213,7 @@ public enum HelpPageTemplate {
                             <td class="desc">Fuzzy tab switcher <span class="note">(filter open tabs with &lt;C-j&gt;/&lt;C-k&gt;)</span></td>
                         </tr>
                         <tr>
-                            <td class="keys"><kbd>x</kbd><span class="sep">/</span><kbd>:q</kbd><span class="sep">/</span><kbd>⌘W</kbd></td>
+                            <td class="keys"><kbd>x</kbd><span class="sep">/</span><kbd>⌘W</kbd></td>
                             <td class="desc">Close active tab <span class="note">(triggers 4s undo toast)</span></td>
                         </tr>
                         <tr>
@@ -217,12 +221,8 @@ public enum HelpPageTemplate {
                             <td class="desc">Undo closed tab <span class="note">(press within 4 seconds of closing)</span></td>
                         </tr>
                         <tr>
-                            <td class="keys"><kbd>⌘T</kbd><span class="sep">/</span><kbd>:tabnew</kbd></td>
+                            <td class="keys"><kbd>⌘T</kbd></td>
                             <td class="desc">Open a new tab with the markdown scratchpad</td>
-                        </tr>
-                        <tr>
-                            <td class="keys"><kbd>:alias</kbd> <span class="note">&lt;name&gt;</span></td>
-                            <td class="desc">Give current tab an alias for quick search in <kbd>b</kbd> (e.g. <code>:alias docs</code>)</td>
                         </tr>
                     </table>
                 </div>
@@ -241,18 +241,6 @@ public enum HelpPageTemplate {
                         <tr>
                             <td class="keys"><kbd>Ctrl</kbd>+<kbd>p</kbd></td>
                             <td class="desc">Alternate between two most recent profiles</td>
-                        </tr>
-                        <tr>
-                            <td class="keys"><kbd>:p</kbd> <span class="note">&lt;name&gt;</span></td>
-                            <td class="desc">Switch directly to profile (e.g. <code>:p work</code>, <code>:p pers</code>)</td>
-                        </tr>
-                        <tr>
-                            <td class="keys"><kbd>:p new</kbd> <span class="note">&lt;name&gt;</span></td>
-                            <td class="desc">Create new profile and switch to it</td>
-                        </tr>
-                        <tr>
-                            <td class="keys"><kbd>:send</kbd> <span class="note">&lt;name&gt;</span></td>
-                            <td class="desc">Move active tab to profile (e.g. <code>:send work</code>)</td>
                         </tr>
                     </table>
                 </div>
@@ -308,58 +296,10 @@ public enum HelpPageTemplate {
                             <td class="keys"><kbd>gh</kbd><span class="sep">/</span><kbd>,h</kbd></td>
                             <td class="desc">Open fuzzy history picker <span class="note">(localized to active profile)</span></td>
                         </tr>
-                        <tr>
-                            <td class="keys"><kbd>:history</kbd></td>
-                            <td class="desc">Open history search prompt</td>
-                        </tr>
-                        <tr>
-                            <td class="keys"><kbd>:clearhistory</kbd></td>
-                            <td class="desc">Clear history: <code>:clearhistory all</code>, <code>today</code>, or <code>--domain &lt;d&gt;</code></td>
-                        </tr>
                     </table>
                 </div>
 
-                <div class="section">
-                    <h2>Privacy, Security & Commands</h2>
-                    <table>
-                        <tr>
-                            <td class="keys"><kbd>:clearcookies</kbd></td>
-                            <td class="desc">Clear cookies for active domain <span class="note">(or :clearcookies all)</span></td>
-                        </tr>
-                        <tr>
-                            <td class="keys"><kbd>:clearstorage</kbd></td>
-                            <td class="desc">Clear localStorage and IndexedDB for active domain</td>
-                        </tr>
-                        <tr>
-                            <td class="keys"><kbd>:forget</kbd></td>
-                            <td class="desc">Full domain nuke: wipes cookies, storage, cache, and history</td>
-                        </tr>
-                        <tr>
-                            <td class="keys"><kbd>:js</kbd> <span class="note">[on|off]</span></td>
-                            <td class="desc">Toggle JavaScript execution on current tab</td>
-                        </tr>
-                        <tr>
-                            <td class="keys"><kbd>:cert</kbd></td>
-                            <td class="desc">Inspect TLS / SSL certificate chain and security trust</td>
-                        </tr>
-                        <tr>
-                            <td class="keys"><kbd>:printpdf</kbd></td>
-                            <td class="desc">Direct headless vector PDF export to <code>~/Downloads/</code></td>
-                        </tr>
-                        <tr>
-                            <td class="keys"><kbd>:fullscreen</kbd></td>
-                            <td class="desc">Toggle native macOS fullscreen <span class="note">(or ⌘⌃F)</span></td>
-                        </tr>
-                        <tr>
-                            <td class="keys"><kbd>:scripts</kbd></td>
-                            <td class="desc">Open userscript folder <code>~/.config/vimzen/scripts/</code> in Finder</td>
-                        </tr>
-                        <tr>
-                            <td class="keys"><kbd>?</kbd><span class="sep">/</span><kbd>:help</kbd></td>
-                            <td class="desc">Open this manual (<code>vimzen://help</code>)</td>
-                        </tr>
-                    </table>
-                </div>
+                \(commandSectionsHTML)
 
                 <footer>
                     Vimzen Browser &middot; Engineered with Swift, AppKit &amp; WebKit &middot; Local-First &amp; Distraction-Free
@@ -368,5 +308,38 @@ public enum HelpPageTemplate {
         </body>
         </html>
         """
+    }
+
+    /// Command tables generated from CommandCatalog — the same source the
+    /// command-bar hint list uses, so the two can never drift apart.
+    private static var commandSectionsHTML: String {
+        CommandSpec.Section.allCases.map { section in
+            let rows = CommandCatalog.all
+                .filter { $0.section == section }
+                .map { spec -> String in
+                    var keys = "<kbd>:\(spec.name)</kbd>"
+                    if let hint = spec.argHint {
+                        keys += " <span class=\"note\">\(escapeHTML(hint))</span>"
+                    }
+                    let aliasNote = spec.aliases.isEmpty
+                        ? ""
+                        : " <span class=\"note\">(:\(spec.aliases.joined(separator: ", :")))</span>"
+                    return "<tr><td class=\"keys\">\(keys)</td><td class=\"desc\">\(escapeHTML(spec.blurb))\(aliasNote)</td></tr>"
+                }
+                .joined()
+            return """
+            <div class="section">
+                <h2>Commands · \(section.rawValue)</h2>
+                <table>\(rows)</table>
+            </div>
+            """
+        }
+        .joined(separator: "\n")
+    }
+
+    private static func escapeHTML(_ s: String) -> String {
+        s.replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
     }
 }
