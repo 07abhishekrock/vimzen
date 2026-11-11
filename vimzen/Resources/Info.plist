@@ -26,6 +26,11 @@
     <true/>
     <key>NSSupportsAutomaticGraphicsSwitching</key>
     <true/>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoadsInWebContent</key>
+        <true/>
+    </dict>
     <key>LSApplicationCategoryType</key>
     <string>public.app-category.productivity</string>
     <key>CFBundleIconFile</key>
