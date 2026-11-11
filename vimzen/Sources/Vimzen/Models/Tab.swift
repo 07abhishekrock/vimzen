@@ -44,6 +44,7 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
     private var detectedTopColor: NSColor? = nil
     private var silenceDebounceTask: Task<Void, Never>?
     private var bypassInsecureWarningURLs = Set<URL>()
+    private var popupConfirmPending = false
     private let scriptBridge = VimzenScriptBridge()
 
     public func markActive() {
@@ -209,7 +210,9 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
         preferences: WKWebpagePreferences,
         decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy, WKWebpagePreferences) -> Void
     ) {
-        preferences.allowsContentJavaScript = self.isJavaScriptEnabled
+        // Session JS toggle (:js) and the persisted per-domain setting both apply
+        let domainJS = DomainSettingsStore.shared.value(.javaScriptEnabled, forHost: navigationAction.request.url?.host)
+        preferences.allowsContentJavaScript = self.isJavaScriptEnabled && domainJS
 
         if navigationAction.shouldPerformDownload {
             decisionHandler(.download, preferences)
@@ -221,7 +224,8 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
            targetURL.scheme?.lowercased() == "http",
            targetURL.host?.lowercased() != "localhost",
            targetURL.host != "127.0.0.1",
-           !bypassInsecureWarningURLs.contains(targetURL) {
+           !bypassInsecureWarningURLs.contains(targetURL),
+           !DomainSettingsStore.shared.value(.allowInsecureHttp, forHost: targetURL.host) {
             decisionHandler(.cancel, preferences)
             Task { @MainActor in
                 let allow = await PluginRegistry.shared.confirm(
@@ -265,6 +269,12 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
         let filename = navigationResponse.response.suggestedFilename ?? "download"
         let length = navigationResponse.response.expectedContentLength
         let sizeInfo = length > 0 ? " (\(ByteCountFormatter.string(fromByteCount: length, countStyle: .file)))" : ""
+
+        // Trusted domains can skip the download confirmation entirely
+        if DomainSettingsStore.shared.value(.skipDownloadConfirmation, forHost: navigationResponse.response.url?.host) {
+            decisionHandler(.download)
+            return
+        }
 
         Task { @MainActor in
             let allow = await PluginRegistry.shared.confirm(
@@ -345,6 +355,13 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
                     isTyped: false
                 )
             }
+        }
+
+        // Per-domain auto-mute applies on every load; re-muting after a manual
+        // unmute on the next navigation is the predictable behavior
+        if DomainSettingsStore.shared.value(.muteAudio, forHost: webView.url?.host), !isMuted {
+            toggleMute(enable: true)
+            PluginRegistry.shared.showToast(NotificationToast(message: "Muted (domain setting)", duration: 3.0))
         }
 
         extractTopColor()
@@ -847,6 +864,29 @@ extension Tab: WKUIDelegate {
         windowFeatures: WKWindowFeatures
     ) -> WKWebView? {
         guard let url = navigationAction.request.url else { return nil }
+
+        // Domains marked popupsRequireConfirmation get a y/N gate keyed off the
+        // *source* page's host; while one confirm is pending further popups from
+        // it are dropped silently (no confirm-stacking from a popup loop)
+        let sourceHost = webView.url?.host
+        if DomainSettingsStore.shared.value(.popupsRequireConfirmation, forHost: sourceHost) {
+            if popupConfirmPending { return nil }
+            popupConfirmPending = true
+            Task { @MainActor in
+                let allow = await PluginRegistry.shared.confirm(
+                    prompt: "POPUP",
+                    promptIcon: "macwindow.badge.plus",
+                    message: "Allow popup to \(url.host ?? url.absoluteString)?",
+                    defaultYes: false
+                )
+                self.popupConfirmPending = false
+                if allow {
+                    self.tabManager?.createTab(url: url, activate: true)
+                }
+            }
+            return nil
+        }
+
         tabManager?.createTab(url: url, activate: true)
         return nil
     }

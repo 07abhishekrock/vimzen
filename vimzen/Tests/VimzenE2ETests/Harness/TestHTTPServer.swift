@@ -305,5 +305,14 @@ extension TestHTTPServer {
         route("/popup-target") { _ in
             .html(title: "Popup Target", "<p>popup-target-marker</p>")
         }
+        // JS gate fixture: the marker says js-off until the script flips it to
+        // js-on — <noscript> doesn't render under allowsContentJavaScript=false
+        route("/js-check") { _ in
+            .html(title: "JS Check", """
+            <p>js-check-marker</p>
+            <p id="jsstate">js-off-marker</p>
+            <script>document.getElementById('jsstate').textContent = 'js-on-marker'</script>
+            """)
+        }
     }
 }

@@ -326,6 +326,37 @@ public final class CommandInputPlugin: InputPlugin {
         case _ where cmd.starts(with: ":open ") || cmd.starts(with: "open "):
             let urlPart = cmd.replacingOccurrences(of: "^:?open\\s+", with: "", options: .regularExpression)
             OpenUrlInputPlugin(tabManager: mainVC.tabManager, inNewTab: false).onSubmit(input: urlPart, controller: controller)
+        case _ where cmd == ":domain" || cmd == "domain" || cmd.starts(with: ":domain ") || cmd.starts(with: "domain "):
+            // :domain → list current host's overrides
+            // :domain <key> on|off|reset → set/clear one (persisted, all profiles)
+            let args = cmd.replacingOccurrences(of: "^:?domain\\s*", with: "", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let host = mainVC.tabManager.activeTab?.url?.host, !host.isEmpty else {
+                PluginRegistry.shared.showToast(NotificationToast(message: "No domain on this tab", duration: 2.0))
+                break
+            }
+            let store = DomainSettingsStore.shared
+            if args.isEmpty {
+                PluginRegistry.shared.showToast(NotificationToast(message: store.summary(forHost: host), duration: 6.0))
+                break
+            }
+            let parts = args.split(separator: " ").map { String($0) }
+            guard parts.count == 2, let key = DomainSettingsStore.Key(rawValue: parts[0]) else {
+                let keys = DomainSettingsStore.Key.allCases.map(\.rawValue).joined(separator: ", ")
+                PluginRegistry.shared.showToast(NotificationToast(message: "Usage: :domain <key> on|off|reset — keys: \(keys)", duration: 6.0))
+                break
+            }
+            switch parts[1] {
+            case "on": store.set(key, true, forHost: host)
+            case "off": store.set(key, false, forHost: host)
+            case "reset": store.set(key, nil, forHost: host)
+            default:
+                PluginRegistry.shared.showToast(NotificationToast(message: "Usage: :domain \(key.rawValue) on|off|reset", duration: 4.0))
+                break
+            }
+            if parts[1] == "on" || parts[1] == "off" || parts[1] == "reset" {
+                PluginRegistry.shared.showToast(NotificationToast(message: "\(host): \(key.rawValue)=\(parts[1])", duration: 3.0))
+            }
         default:
             break
         }
