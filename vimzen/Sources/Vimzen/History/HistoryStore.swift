@@ -35,10 +35,15 @@ public final class HistoryStore: @unchecked Sendable {
 
     private func openDatabase() {
         let fileManager = FileManager.default
-        guard let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
-            return
+        let vimzenDir: URL
+        if let testDir = TestEnvironment.dataDirectory {
+            vimzenDir = testDir
+        } else {
+            guard let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+                return
+            }
+            vimzenDir = appSupport.appendingPathComponent("Vimzen", isDirectory: true)
         }
-        let vimzenDir = appSupport.appendingPathComponent("Vimzen", isDirectory: true)
 
         try? fileManager.createDirectory(at: vimzenDir, withIntermediateDirectories: true)
         let dbURL = vimzenDir.appendingPathComponent("history.db")

@@ -15,6 +15,11 @@ let package = Package(
             name: "Vimzen",
             dependencies: [],
             path: "Sources/Vimzen"
+        ),
+        .testTarget(
+            name: "VimzenE2ETests",
+            dependencies: [],
+            path: "Tests/VimzenE2ETests"
         )
     ]
 )

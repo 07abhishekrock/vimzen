@@ -31,15 +31,18 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         window.minSize = NSSize(width: 640, height: 400)
         window.delegate = self
 
-        // Restore user's saved window position and size; default to centered 1240x800 on first launch
-        window.setFrameAutosaveName("VimzenMainWindow")
-        if !window.setFrameUsingName("VimzenMainWindow") {
-            if let screen = NSScreen.main {
-                let x = (screen.visibleFrame.width - defaultWidth) / 2 + screen.visibleFrame.minX
-                let y = (screen.visibleFrame.height - defaultHeight) / 2 + screen.visibleFrame.minY
-                window.setFrame(NSRect(x: x, y: y, width: defaultWidth, height: defaultHeight), display: true)
-            } else {
-                window.center()
+        // Restore user's saved window position and size; default to centered 1240x800 on first launch.
+        // E2E test runs get a fixed deterministic frame and no autosave cross-talk.
+        if !TestEnvironment.isEnabled {
+            window.setFrameAutosaveName("VimzenMainWindow")
+            if !window.setFrameUsingName("VimzenMainWindow") {
+                if let screen = NSScreen.main {
+                    let x = (screen.visibleFrame.width - defaultWidth) / 2 + screen.visibleFrame.minX
+                    let y = (screen.visibleFrame.height - defaultHeight) / 2 + screen.visibleFrame.minY
+                    window.setFrame(NSRect(x: x, y: y, width: defaultWidth, height: defaultHeight), display: true)
+                } else {
+                    window.center()
+                }
             }
         }
 
@@ -52,6 +55,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
 
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+
+        // Applied after contentViewController assignment: installing the controller
+        // sizes the window to MainViewController's initial 1240x800 view frame
+        if TestEnvironment.isEnabled {
+            window.setFrame(NSRect(x: 60, y: 60, width: 1100, height: 700), display: true)
+        }
 
         // Clip window's root frame (NSThemeFrame) to standard macOS rounded corners
         if let themeFrame = window.contentView?.superview {

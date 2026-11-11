@@ -24,8 +24,19 @@ public final class ProfileManager: ObservableObject {
     public init() {}
 
     public func dataStore(for profile: Profile) -> WKWebsiteDataStore {
+        // Ephemeral profiles and E2E test runs never touch the default (user) store.
+        // In test mode every profile gets its own nonPersistent store, which keeps
+        // per-profile cookie/storage isolation semantics intact without disk state.
         if profile.isEphemeral {
             return .nonPersistent()
+        }
+        if TestEnvironment.isEnabled {
+            if let existing = dataStores[profile.id] {
+                return existing
+            }
+            let store = WKWebsiteDataStore.nonPersistent()
+            dataStores[profile.id] = store
+            return store
         }
         if profile.id == Profile.personal.id {
             return .default()

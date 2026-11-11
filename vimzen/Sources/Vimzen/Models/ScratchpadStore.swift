@@ -3,8 +3,13 @@ import Foundation
 @MainActor
 public enum ScratchpadStore {
     private static var scratchpadsDirectory: URL {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let dir = appSupport.appendingPathComponent("Vimzen/scratchpads", isDirectory: true)
+        let dir: URL
+        if let testDir = TestEnvironment.dataDirectory {
+            dir = testDir.appendingPathComponent("scratchpads", isDirectory: true)
+        } else {
+            let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            dir = appSupport.appendingPathComponent("Vimzen/scratchpads", isDirectory: true)
+        }
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }

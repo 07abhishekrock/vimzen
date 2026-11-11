@@ -44,6 +44,10 @@ public final class ModeBadgePlugin: ViewPlugin {
                 self?.iconView.image = NSImage(systemSymbolName: mode.symbolIconName, accessibilityDescription: mode.rawValue)?.withSymbolConfiguration(config)
                 self?.iconView.contentTintColor = mode.badgeTextColor
                 self?.view.layer?.backgroundColor = mode.badgeBackgroundColor.cgColor
+                // Expose the active mode to VoiceOver (and UI automation) as text
+                self?.view.setAccessibilityElement(true)
+                self?.view.setAccessibilityRole(.staticText)
+                self?.view.setAccessibilityLabel(mode.rawValue)
             }
             .store(in: &cancellables)
     }
