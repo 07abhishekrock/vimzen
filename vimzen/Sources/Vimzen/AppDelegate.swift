@@ -77,6 +77,48 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
             self.windowBorderView = border
         }
         window.invalidateShadow()
+        compactTrafficLights(in: window)
+    }
+
+    /// Shrinks the native traffic-light buttons (close/minimize/zoom) and centers
+    /// them vertically in the 24px drag header. Stock widgets are 14pt, vertically
+    /// centered on the 32px system titlebar — leaving ~9px above and ~1px below
+    /// against the header seam. On macOS 26 each widget renders through a SwiftUI
+    /// hosting subview (_NSCoreHostingView<ThemeWidgetView>), and AppKit resets
+    /// layer transforms during layout — so the transform targets the hosting
+    /// view's layer and is re-applied after first layout and on window key events.
+    /// The view frames (hit targets) are untouched — only the artwork is scaled.
+    private func compactTrafficLights(in window: NSWindow) {
+        // 14pt artwork at scale ~0.714 → 10pt. The hosting layer top-aligns scaled
+        // artwork in the widget cell and responds to translation as offset/2, so
+        // yShift −4 lands it dead-center in the 24px header (~7px padding). The
+        // horizontal shifts tighten the 23pt system pitch to 19pt (stock-look gap).
+        let scale: CGFloat = 10.0 / 14.0
+        let yShift: CGFloat = -2.8
+        let xShifts: [NSWindow.ButtonType: CGFloat] = [
+            .closeButton: 0,
+            .miniaturizeButton: -5.6,
+            .zoomButton: -11.2
+        ]
+
+        func apply() {
+            for buttonType in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
+                guard let button = window.standardWindowButton(buttonType) else { continue }
+                // macOS 26 renders each widget through a SwiftUI hosting subview —
+                // transform that layer exactly once (transforms compound down the tree)
+                let targets = button.subviews.isEmpty ? [button] : button.subviews
+                for target in targets {
+                    target.wantsLayer = true
+                    target.layer?.transform = CATransform3DTranslate(
+                        CATransform3DMakeScale(scale, scale, 1), xShifts[buttonType] ?? 0, yShift, 0)
+                }
+            }
+        }
+
+        apply()
+        // AppKit resets the widget layers during the first layout pass — re-apply after it
+        DispatchQueue.main.async { apply() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { apply() }
     }
 
     public func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -180,5 +222,18 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         mainViewController?.view.layer?.cornerRadius = 16.0
         windowBorderView?.isHidden = false
         window?.invalidateShadow()
+        // Fullscreen transitions can remount the titlebar widgets, dropping the
+        // compact transform — re-apply it
+        if let window = notification.object as? NSWindow {
+            compactTrafficLights(in: window)
+        }
+    }
+
+    /// Titlebar relayouts on resize can reset the widget layers — re-apply the
+    /// compact transform (idempotent, three layer writes).
+    public func windowDidResize(_ notification: Notification) {
+        if let window = notification.object as? NSWindow {
+            compactTrafficLights(in: window)
+        }
     }
 }
