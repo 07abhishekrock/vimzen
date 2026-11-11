@@ -33,6 +33,19 @@ final class ExternalSchemeTests: E2ETestCase {
         assertTabCount(1)
     }
 
+    /// The address bar must recognize custom schemes as URLs (never route them
+    /// to Google search); the load then hits the same external-app confirm.
+    func testTypedExternalSchemeURLShowsConfirm() {
+        app.openInCurrentTab("vimzene2e-test://open?id=99")
+        assertText("vimzene2e-test://open?id=99")
+        assertText("in an external app?")
+
+        app.escape()
+        XCTAssertTrue(app.waitForTextToDisappear("in an external app?"), "confirm did not dismiss on Escape")
+        assertTabCount(1)
+        assertNoText("Google Search", settle: 1.5)
+    }
+
     /// target=_blank with a custom scheme routes through createWebViewWith —
     /// the confirm appears but no dead tab is created, accepted or not.
     func testExternalTargetBlankCreatesNoTab() {

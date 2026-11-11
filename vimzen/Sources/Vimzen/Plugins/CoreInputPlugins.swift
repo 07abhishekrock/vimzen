@@ -132,6 +132,15 @@ public final class OpenUrlInputPlugin: InputPlugin {
             return URL(string: input) ?? URL(string: "vimzen://help")!
         } else if input.starts(with: "http://") || input.starts(with: "https://") {
             return URL(string: input) ?? URL(string: "https://google.com/search?q=\(input)")!
+        } else if input.range(of: "^[a-zA-Z][a-zA-Z0-9+.-]*://", options: .regularExpression) != nil,
+                  let url = URL(string: input) {
+            // Any other explicit scheme:// (selfservicecapability, slack, …) —
+            // the load path intercepts these with the external-app confirm
+            return url
+        } else if input.range(of: "^(mailto|tel|sms|facetime):[^ ]", options: .regularExpression) != nil,
+                  let url = URL(string: input) {
+            // Scheme-without-slashes family (mailto:user@x.com, tel:+1…)
+            return url
         } else if input.contains(".") && !input.contains(" ") {
             return URL(string: "https://\(input)")!
         } else {
@@ -653,6 +662,15 @@ public final class HistoryPickerInputPlugin: InputPlugin {
             return URL(string: input) ?? URL(string: "vimzen://help")!
         } else if input.starts(with: "http://") || input.starts(with: "https://") {
             return URL(string: input) ?? URL(string: "https://google.com/search?q=\(input)")!
+        } else if input.range(of: "^[a-zA-Z][a-zA-Z0-9+.-]*://", options: .regularExpression) != nil,
+                  let url = URL(string: input) {
+            // Any other explicit scheme:// (selfservicecapability, slack, …) —
+            // the load path intercepts these with the external-app confirm
+            return url
+        } else if input.range(of: "^(mailto|tel|sms|facetime):[^ ]", options: .regularExpression) != nil,
+                  let url = URL(string: input) {
+            // Scheme-without-slashes family (mailto:user@x.com, tel:+1…)
+            return url
         } else if input.contains(".") && !input.contains(" ") {
             return URL(string: "https://\(input)")!
         } else {
