@@ -363,6 +363,10 @@ public final class KeyEngine: ObservableObject {
             clearBuffer()
             onTriggerInputPlugin?("input.move-tab-profile")
             return true
+        case "dt":
+            tabManager.duplicateActiveTab()
+            clearBuffer()
+            return true
         case "b", "T":
             clearBuffer()
             onTriggerInputPlugin?("input.tab-picker")
@@ -381,7 +385,7 @@ public final class KeyEngine: ObservableObject {
             return true
 
         default:
-            let validPrefixes = ["g", ":", ","]
+            let validPrefixes = ["g", ":", ",", "d"]
             if !validPrefixes.contains(sequence) {
                 clearBuffer()
             }

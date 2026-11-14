@@ -8,9 +8,12 @@ public final class UserScriptManager {
     public let scriptsDirectory: URL
 
     private init() {
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        let dir = home.appendingPathComponent(".config/vimzen/scripts", isDirectory: true)
-        self.scriptsDirectory = dir
+        if let testDir = TestEnvironment.dataDirectory {
+            self.scriptsDirectory = testDir.appendingPathComponent("scripts", isDirectory: true)
+        } else {
+            let home = FileManager.default.homeDirectoryForCurrentUser
+            self.scriptsDirectory = home.appendingPathComponent(".config/vimzen/scripts", isDirectory: true)
+        }
 
         ensureDirectoryAndSampleScript()
     }

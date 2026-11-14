@@ -217,6 +217,10 @@ public enum HelpPageTemplate {
                             <td class="desc">Close active tab <span class="note">(triggers 4s undo toast)</span></td>
                         </tr>
                         <tr>
+                            <td class="keys"><kbd>dt</kbd></td>
+                            <td class="desc">Duplicate active tab <span class="note">(fresh history; scratchpad duplicates as blank)</span></td>
+                        </tr>
+                        <tr>
                             <td class="keys"><kbd>u</kbd></td>
                             <td class="desc">Undo closed tab <span class="note">(press within 4 seconds of closing)</span></td>
                         </tr>

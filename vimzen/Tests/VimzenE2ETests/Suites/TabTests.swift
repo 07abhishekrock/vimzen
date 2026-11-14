@@ -13,6 +13,17 @@ final class TabTests: E2ETestCase {
         assertText("Closed:")
     }
 
+    func testDuplicateTab() {
+        app.openInCurrentTab("\(server.baseURL)/alpha")
+        assertText("Alpha Page")
+        assertTabCount(1)
+
+        app.typeChord("dt")
+        assertTabCount(2)
+        assertText("Duplicated: Alpha Page")
+        assertText("alpha-marker")
+    }
+
     func testCloseTabUndoRestore() {
         app.openInNewTab("\(server.baseURL)/alpha")
         assertText("Alpha Page")

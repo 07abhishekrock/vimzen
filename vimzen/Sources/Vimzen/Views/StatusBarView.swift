@@ -1,6 +1,22 @@
 import AppKit
 import Combine
 
+extension NSTextView {
+    /// Disables native text assists (spellcheck, completion popup, smart quotes,
+    /// autocorrection…) — the vim command bar is raw input, none of these apply.
+    func disableTextAssists() {
+        isContinuousSpellCheckingEnabled = false
+        isGrammarCheckingEnabled = false
+        isAutomaticSpellingCorrectionEnabled = false
+        isAutomaticTextReplacementEnabled = false
+        isAutomaticTextCompletionEnabled = false
+        isAutomaticQuoteSubstitutionEnabled = false
+        isAutomaticDashSubstitutionEnabled = false
+        isAutomaticLinkDetectionEnabled = false
+        isAutomaticDataDetectionEnabled = false
+    }
+}
+
 @MainActor
 public final class StatusBarView: NSView, NSTextFieldDelegate {
     private let leftStack = NSStackView()
@@ -476,6 +492,22 @@ public final class StatusBarView: NSView, NSTextFieldDelegate {
     }
 
     // MARK: - NSTextFieldDelegate
+
+    public func controlTextDidBeginEditing(_ obj: Notification) {
+        (obj.userInfo?["NSFieldEditor"] as? NSTextView)?.disableTextAssists()
+    }
+
+    /// Kills the manual completion popup (F5 / Option-Esc) in the command bar.
+    public func control(
+        _ control: NSControl,
+        textView: NSTextView,
+        completions words: [String],
+        forPartialWordRange charRange: NSRange,
+        indexOfSelectedItem index: UnsafeMutablePointer<Int>
+    ) -> [String] {
+        index.pointee = -1
+        return []
+    }
 
     public func controlTextDidChange(_ obj: Notification) {
         if let plugin = PluginRegistry.shared.activeInputPlugin {

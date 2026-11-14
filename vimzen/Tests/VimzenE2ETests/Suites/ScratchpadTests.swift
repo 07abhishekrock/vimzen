@@ -39,4 +39,31 @@ final class ScratchpadTests: E2ETestCase {
         app.openInCurrentTab("vimzen://newtab")
         assertText("e2enotes", timeout: 10)
     }
+
+    func testCaretStartsAtEndWhenReenteringInsert() {
+        app.sendKeys([.code(VimzenDriver.kI)])
+        assertMode("INSERT")
+        app.typeChord("first")
+
+        app.escape()
+        assertMode("NORMAL")
+
+        // Re-entering INSERT must land the caret after "first", not before it
+        app.sendKeys([.code(VimzenDriver.kI)])
+        assertMode("INSERT")
+        app.typeChord("second")
+
+        let notesURL = testDir
+            .appendingPathComponent("scratchpads", isDirectory: true)
+            .appendingPathComponent(personalNotesFile)
+
+        let deadline = Date().addingTimeInterval(8)
+        var contents = ""
+        while Date() < deadline {
+            contents = (try? String(contentsOf: notesURL, encoding: .utf8)) ?? ""
+            if contents.contains("second") { break }
+            usleep(200_000)
+        }
+        XCTAssertEqual(contents, "firstsecond", "caret did not land at end of existing notes: '\(contents)'")
+    }
 }

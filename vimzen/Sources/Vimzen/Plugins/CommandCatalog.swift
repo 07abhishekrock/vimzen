@@ -53,6 +53,7 @@ public enum CommandCatalog {
         CommandSpec("clearstorage", aliases: ["cleartokens"], argHint: "[--domain <d>]", blurb: "Clear localStorage/IndexedDB for a domain", section: .privacy),
         CommandSpec("forget", argHint: "[--domain <d>]", blurb: "Nuke a domain: cookies, storage, cache, history", section: .privacy),
         CommandSpec("js", aliases: ["toggle js"], argHint: "[on|off]", blurb: "Toggle JavaScript on this tab (session only)", section: .privacy),
+        CommandSpec("userscripts", aliases: ["us"], argHint: "[on|off]", blurb: "Toggle userscripts on this tab (session only)", section: .privacy),
         CommandSpec("cert", aliases: ["ssl"], blurb: "Inspect TLS certificate chain", section: .privacy),
         CommandSpec("domain", argHint: "[<key> on|off|reset]", blurb: "Per-domain settings, persisted across profiles", section: .privacy),
 

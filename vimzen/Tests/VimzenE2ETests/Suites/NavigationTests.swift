@@ -48,6 +48,16 @@ final class NavigationTests: E2ETestCase {
         assertServerHit("/alpha")
     }
 
+    func testReloadFullCommand() {
+        app.openInCurrentTab("\(server.baseURL)/alpha")
+        assertText("Alpha Page")
+
+        server.clearLog()
+        app.runCommand("reload")
+        assertServerHit("/alpha")
+        assertText("Alpha Page")
+    }
+
     func testBackForwardNavigation() {
         app.openInCurrentTab("\(server.baseURL)/alpha")
         assertText("Alpha Page")

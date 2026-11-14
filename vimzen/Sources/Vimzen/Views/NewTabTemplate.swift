@@ -84,6 +84,10 @@ public enum NewTabTemplate {
             <script>
                 const pad = document.getElementById('pad');
 
+                // Caret starts after any restored notes, not at position 0
+                pad.focus();
+                pad.setSelectionRange(pad.value.length, pad.value.length);
+
                 // Save notes to native Swift on input (which writes to ~/.config or AppSupport .md)
                 pad.addEventListener('input', () => {
                     if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.vimzen) {

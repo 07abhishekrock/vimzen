@@ -225,6 +225,21 @@ public final class TabManager: ObservableObject {
         closeTab(id: activeId)
     }
 
+    /// Duplicates the active tab into a new activated tab. Scratchpads duplicate
+    /// as fresh scratchpads; error pages re-attempt their failed URL. WKWebView
+    /// exposes no API to clone back/forward history, so the copy starts fresh.
+    public func duplicateActiveTab() {
+        guard let current = activeTab else { return }
+        if current.isNewTabScratchpad {
+            createTab(url: nil, activate: true)
+        } else {
+            createTab(url: current.url, activate: true)
+        }
+        PluginRegistry.shared.showToast(
+            NotificationToast(message: "Duplicated: \(current.title.isEmpty ? "Tab" : current.title)", duration: 2.0)
+        )
+    }
+
     public func closeTab(id: UUID) {
         guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
         let closingTab = tabs.remove(at: index)

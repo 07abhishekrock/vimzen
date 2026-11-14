@@ -21,6 +21,7 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
     @Published public var canGoBack: Bool = false
     @Published public var canGoForward: Bool = false
     @Published public var isJavaScriptEnabled: Bool = true
+    public private(set) var isUserScriptsEnabled: Bool = true
     @Published public private(set) var topColor: NSColor? = nil
     @Published public var isAudible: Bool = false
     @Published public var isPlayingMedia: Bool = false
@@ -124,13 +125,9 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
         // Attach custom userscripts from ~/.config/vimzen/scripts/*.js
         UserScriptManager.shared.attachUserScripts(to: webViewConfiguration.userContentController)
 
-        let darkBg = NSColor(calibratedRed: 0.07, green: 0.07, blue: 0.08, alpha: 1.0)
         self.webView = WKWebView(frame: .zero, configuration: webViewConfiguration)
         self.webView.autoresizingMask = [.width, .height]
-        self.webView.setValue(false, forKey: "drawsBackground")
-        self.webView.underPageBackgroundColor = darkBg
         self.webView.wantsLayer = true
-        self.webView.layer?.backgroundColor = darkBg.cgColor
 
         super.init()
 
@@ -378,6 +375,16 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
         if failedURL == nil {
             self.url = webView.url
         }
+        // Back/forward resurfaces pages without load(url:)/template loaders, so
+        // re-sync the canvas with whatever was actually committed.
+        if let committed = webView.url,
+           failedURL == nil,
+           committed.scheme?.lowercased() != "vimzen",
+           committed.absoluteString != "about:blank" {
+            applyWebPageVisuals()
+        } else {
+            applyInternalPageVisuals()
+        }
     }
 
     public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -452,6 +459,7 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
         title = "\(code) · \(headline)"
         url = failed
         topColor = NSColor(calibratedRed: 0.07, green: 0.07, blue: 0.08, alpha: 1.0)
+        applyInternalPageVisuals()
         webView.loadHTMLString(
             ErrorPageTemplate.html(code: code, headline: headline, message: message, failedURL: failed),
             baseURL: failed
@@ -459,6 +467,25 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
     }
 
     // MARK: - Navigation & Actions
+
+    /// WebKit starts every webview on a white canvas. Internal pages (scratchpad,
+    /// help, error) are dark-themed, so they swap to a transparent canvas over a
+    /// dark underlay to avoid a white splash before first paint. Web pages must
+    /// keep the stock opaque canvas: sites with a transparent <body> (App Store
+    /// Connect's light-only login, …) would otherwise render near-black.
+    private static let internalPageBg = NSColor(calibratedRed: 0.07, green: 0.07, blue: 0.08, alpha: 1.0)
+
+    private func applyInternalPageVisuals() {
+        webView.setValue(false, forKey: "drawsBackground")
+        webView.underPageBackgroundColor = Self.internalPageBg
+        webView.layer?.backgroundColor = Self.internalPageBg.cgColor
+    }
+
+    private func applyWebPageVisuals() {
+        webView.setValue(true, forKey: "drawsBackground")
+        webView.underPageBackgroundColor = nil
+        webView.layer?.backgroundColor = nil
+    }
 
     private func deriveFaviconURL(for pageURL: URL?) {
         guard let pageURL = pageURL,
@@ -495,6 +522,7 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
         provisionalTargetURL = url
         lastRequestedURL = url
 
+        applyWebPageVisuals()
         let request = URLRequest(url: url)
         webView.load(request)
     }
@@ -510,6 +538,7 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
         isAudible = false
         isPlayingMedia = false
         topColor = NSColor(calibratedRed: 0.07, green: 0.07, blue: 0.08, alpha: 1.0)
+        applyInternalPageVisuals()
         webView.loadHTMLString(HelpPageTemplate.html(), baseURL: URL(string: "vimzen://help"))
     }
 
@@ -541,6 +570,7 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
         isAudible = false
         isPlayingMedia = false
         updateEffectiveTopColor()
+        applyInternalPageVisuals()
         let savedNotes = ScratchpadStore.loadNotes(for: profileId)
         webView.loadHTMLString(NewTabTemplate.html(initialNotes: savedNotes), baseURL: URL(string: "vimzen://newtab"))
     }
@@ -580,7 +610,8 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
 
     public func focusEditorIfNewTab() {
         if isNewTabScratchpad {
-            webView.evaluateJavaScript("document.getElementById('pad')?.focus();", completionHandler: nil)
+            let script = "(function(){var p=document.getElementById('pad');if(p){p.focus();p.setSelectionRange(p.value.length,p.value.length);}})();"
+            webView.evaluateJavaScript(script, completionHandler: nil)
         }
     }
 
@@ -838,6 +869,36 @@ public final class Tab: NSObject, Identifiable, ObservableObject, WKNavigationDe
         webView.reload()
     }
 
+    /// Session-only userscript kill switch for this tab (:userscripts off).
+    /// New tabs still get scripts; the flag dies with the tab.
+    public func toggleUserScripts(enable: Bool? = nil) {
+        if let enable = enable {
+            isUserScriptsEnabled = enable
+        } else {
+            isUserScriptsEnabled.toggle()
+        }
+        let ucc = webView.configuration.userContentController
+        ucc.removeAllUserScripts()
+        // The window.vimzen bridge is not a userscript — always re-add it. Its
+        // script message handler is registered separately and survives the wipe.
+        ucc.addUserScript(WKUserScript(
+            source: VimzenScriptBridge.injectedScriptSource,
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: false
+        ))
+        if isUserScriptsEnabled {
+            UserScriptManager.shared.attachUserScripts(to: ucc)
+        }
+        // User-script changes only apply to subsequent loads. HTML-string pages
+        // (scratchpad) can't be webView.reload()'d — that re-requests the base
+        // URL — so re-render the template; web pages reload normally.
+        if isNewTabScratchpad {
+            loadNewTabTemplate()
+        } else {
+            reload()
+        }
+    }
+
     public func certificateSummary() -> String {
         guard let url = webView.url else {
             return "No page loaded"
@@ -987,6 +1048,7 @@ extension Tab: WKUIDelegate {
         alert.accessoryView = field
         alert.layout()
         alert.window.makeFirstResponder(field)
+        (field.currentEditor() as? NSTextView)?.disableTextAssists()
 
         let accepted = alert.runModal() == .alertFirstButtonReturn
         completionHandler(accepted ? field.stringValue : nil)

@@ -227,11 +227,11 @@ public final class CommandInputPlugin: InputPlugin {
                 )
                 PluginRegistry.shared.showToast(toast)
             }
-        case ":qa", ":qall", "qa":
+        case ":qa", ":qall", "qa", "qall":
             NSApp.terminate(nil)
         case ":fullscreen", "fullscreen", ":fs", "fs":
             mainVC.view.window?.toggleFullScreen(nil)
-        case ":r", ":reload", "r":
+        case ":r", ":reload", "r", "reload":
             mainVC.tabManager.activeTab?.reload()
         case ":tabnew", "tabnew", ":t", "t":
             mainVC.tabManager.createTab(url: nil, activate: true)
@@ -322,6 +322,18 @@ public final class CommandInputPlugin: InputPlugin {
         case ":cert", "cert", ":ssl", "ssl":
             let summary = mainVC.tabManager.activeTab?.certificateSummary() ?? "No active tab"
             PluginRegistry.shared.showToast(NotificationToast(message: summary, duration: 4.0))
+        case _ where cmd == ":userscripts" || cmd == "userscripts" || cmd.starts(with: ":userscripts ") || cmd.starts(with: "userscripts ") || cmd == ":us" || cmd == "us" || cmd.starts(with: ":us ") || cmd.starts(with: "us "):
+            let sub = cmd.replacingOccurrences(of: "^:?(userscripts|us)\\s*", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let activeTab = mainVC.tabManager.activeTab else { break }
+            if sub == "on" {
+                activeTab.toggleUserScripts(enable: true)
+            } else if sub == "off" {
+                activeTab.toggleUserScripts(enable: false)
+            } else {
+                activeTab.toggleUserScripts()
+            }
+            let status = activeTab.isUserScriptsEnabled ? "ON" : "OFF (this tab)"
+            PluginRegistry.shared.showToast(NotificationToast(message: "Userscripts: \(status)", duration: 2.0))
         case ":scripts", "scripts":
             let dir = UserScriptManager.shared.scriptsDirectory
             NSWorkspace.shared.open(dir)
